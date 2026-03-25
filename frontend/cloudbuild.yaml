@@ -1,0 +1,13 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'REACT_APP_API_BASE=${_BACKEND_URL}'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/resolve-490813/resolve-repo/resolve-frontend:v1'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/resolve-490813/resolve-repo/resolve-frontend:v1'
+substitutions:
+  _BACKEND_URL: 'https://resolve-backend-147155498924.us-central1.run.app'

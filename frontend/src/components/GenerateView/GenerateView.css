@@ -1,0 +1,146 @@
+.generate-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+/* ═══ HERO — Commanding presence ═══ */
+.generate-view__hero {
+  padding: var(--space-xl) 0 var(--space-md);
+  position: relative;
+}
+
+/* Soft glow orb behind hero */
+.generate-view__hero-accent {
+  position: absolute;
+  top: -60px;
+  left: -80px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%);
+  pointer-events: none;
+  filter: blur(60px);
+  animation: heroGlow 6s ease-in-out infinite;
+}
+
+@keyframes heroGlow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.generate-view__hero-title {
+  font: var(--text-display);
+  color: var(--color-text-primary);
+  letter-spacing: -2.5px;
+  margin-bottom: var(--space-md);
+  line-height: 1.0;
+  position: relative;
+}
+
+.generate-view__hero-highlight {
+  background: var(--gradient-gold);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 20px var(--color-accent-glow));
+  transition: filter 300ms ease;
+  background-size: 200% 100%;
+  animation: shimmerText 4s ease-in-out infinite;
+}
+
+@keyframes shimmerText {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.generate-view__hero-highlight:hover {
+  filter: drop-shadow(0 0 40px var(--color-accent-intense));
+}
+
+.generate-view__hero-desc {
+  font: var(--text-body);
+  color: var(--color-text-secondary);
+  max-width: 520px;
+  line-height: 1.65;
+  position: relative;
+  transition: color 300ms ease;
+}
+
+.generate-view__hero:hover .generate-view__hero-desc {
+  color: var(--color-text-primary);
+}
+
+/* ═══ Card sections ═══ */
+.generate-view__input-card {
+  border-color: var(--color-border);
+}
+
+.generate-view__response-card {
+  border-color: var(--color-border-accent);
+  position: relative;
+}
+
+/* Gold accent bar on response card */
+.generate-view__response-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -1px;
+  right: -1px;
+  height: 3px;
+  background: var(--gradient-gold);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  z-index: 1;
+}
+
+/* Card header with tags */
+.generate-view__card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.generate-view__card-tag {
+  font: var(--text-label);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: 4px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-glass);
+  transition: all 250ms var(--ease-out-expo);
+}
+
+.generate-view__card-tag:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-secondary);
+  background: var(--color-glass-hover);
+}
+
+.generate-view__card-tag--output {
+  color: var(--color-accent-text);
+  border-color: var(--color-border-accent);
+  background: var(--color-accent-subtle);
+  box-shadow: var(--shadow-glow-sm);
+}
+
+.generate-view__card-tag--output:hover {
+  color: var(--color-accent-text);
+  box-shadow: var(--shadow-glow-md);
+}
+
+.generate-view__card-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--color-border-hover), transparent 80%);
+}
+
+/* Actions separator */
+.generate-view__actions {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border-faint);
+}
