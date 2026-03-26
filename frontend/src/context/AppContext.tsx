@@ -101,6 +101,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
         reasoning: null,
         sources: [],
       };
+    case 'NAVIGATE_USER_MANAGEMENT':
+      return { ...state, view: 'user-management', selectedConversationId: null };
+    case 'NAVIGATE_ANALYTICS':
+      return { ...state, view: 'analytics', selectedConversationId: null };
     default:
       return state;
   }

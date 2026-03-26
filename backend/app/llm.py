@@ -36,7 +36,7 @@ def _parse_delimited(text: str) -> tuple[str, str]:
     return response_part, reasoning_part
 
 
-def _generate_sync(system_prompt: str, context: str, query: str) -> tuple[str, str]:
+def _generate_sync(system_prompt: str, context: str, query: str) -> tuple[str, str, dict]:
     settings = get_settings()
 
     user_message = f"{context}\n\nCustomer Query:\n{query}"
@@ -51,6 +51,15 @@ def _generate_sync(system_prompt: str, context: str, query: str) -> tuple[str, s
         contents=user_message,
         config=config,
     )
+
+    # Extract token usage metadata
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "thinking_tokens": 0}
+    if hasattr(result, "usage_metadata") and result.usage_metadata:
+        um = result.usage_metadata
+        usage["prompt_tokens"] = getattr(um, "prompt_token_count", 0) or 0
+        usage["completion_tokens"] = getattr(um, "candidates_token_count", 0) or 0
+        usage["total_tokens"] = getattr(um, "total_token_count", 0) or 0
+        usage["thinking_tokens"] = getattr(um, "thoughts_token_count", 0) or 0
 
     # Extract thinking parts as fallback reasoning
     thinking_text = ""
@@ -68,8 +77,8 @@ def _generate_sync(system_prompt: str, context: str, query: str) -> tuple[str, s
     if not reasoning and thinking_text:
         reasoning = thinking_text.strip()
 
-    return response, reasoning
+    return response, reasoning, usage
 
 
-async def generate(system_prompt: str, context: str, query: str) -> tuple[str, str]:
+async def generate(system_prompt: str, context: str, query: str) -> tuple[str, str, dict]:
     return await asyncio.to_thread(_generate_sync, system_prompt, context, query)

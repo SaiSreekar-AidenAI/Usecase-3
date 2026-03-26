@@ -3,6 +3,8 @@ import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motio
 import { ThemeSwitcher } from '../ThemeSwitcher/ThemeSwitcher';
 import { useTheme } from '../../context/ThemeContext';
 import { useIntro } from '../../context/IntroContext';
+import { useAuth } from '../../context/AuthContext';
+import { useAppDispatch } from '../../context/AppContext';
 import './Layout.css';
 
 interface LayoutProps {
@@ -17,6 +19,8 @@ export function Layout({ sidebar, children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme } = useTheme();
   const { phase, sidebarReady, atmosphereReady, topbarReady, contentReady } = useIntro();
+  const { user, logout, isAdmin } = useAuth();
+  const dispatch = useAppDispatch();
   const isFirstRender = useRef(true);
   const prevTheme = useRef(theme);
   const [flashKey, setFlashKey] = useState<number | null>(null);
@@ -128,6 +132,44 @@ export function Layout({ sidebar, children }: LayoutProps) {
         </div>
 
         <div className="sidebar__content">{sidebar}</div>
+
+        {/* User section */}
+        <motion.div
+          className="sidebar__user-section"
+          initial={introDone ? false : { opacity: 0, y: 10 }}
+          animate={sidebarReady ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+          transition={{ duration: 0.4, ease: 'easeOut', delay: introDone ? 0 : 0.38 }}
+        >
+          {user && (
+            <div className="sidebar__user-info">
+              <span className="sidebar__user-name">{user.name}</span>
+              <span className={`sidebar__user-role sidebar__user-role--${user.role}`}>
+                {user.role}
+              </span>
+            </div>
+          )}
+          <div className="sidebar__user-actions">
+            {isAdmin && (
+              <button
+                className="sidebar__nav-btn"
+                onClick={() => dispatch({ type: 'NAVIGATE_ANALYTICS' })}
+              >
+                Analytics
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                className="sidebar__nav-btn"
+                onClick={() => dispatch({ type: 'NAVIGATE_USER_MANAGEMENT' })}
+              >
+                Users
+              </button>
+            )}
+            <button className="sidebar__nav-btn sidebar__nav-btn--logout" onClick={logout}>
+              Logout
+            </button>
+          </div>
+        </motion.div>
 
         {/* Footer: fade up */}
         <motion.div
