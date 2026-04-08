@@ -78,6 +78,7 @@ if origins == ["*"]:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Access-Token"],
     )
 else:
     app.add_middleware(
@@ -86,6 +87,7 @@ else:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Access-Token"],
     )
 
 app.add_middleware(AuthMiddleware)

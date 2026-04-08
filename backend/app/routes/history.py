@@ -9,14 +9,16 @@ router = APIRouter()
 
 @router.get("/api/history", response_model=list[ConversationResponse])
 async def get_history(request: Request):
-    rows = await get_all_conversations()
+    user_id = request.state.user["id"]
+    rows = await get_all_conversations(user_id=user_id)
     await emit_history_view(request.state.user, request)
     return [ConversationResponse(**r) for r in rows]
 
 
 @router.patch("/api/history/{conv_id}")
 async def update_one(conv_id: str, req: UpdateConversationRequest, request: Request):
-    updated = await update_conversation_response(conv_id, req.response)
+    user_id = request.state.user["id"]
+    updated = await update_conversation_response(conv_id, req.response, user_id=user_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Conversation not found")
     await emit_history_edit(request.state.user, request, conv_id)
@@ -25,7 +27,8 @@ async def update_one(conv_id: str, req: UpdateConversationRequest, request: Requ
 
 @router.delete("/api/history/{conv_id}")
 async def delete_one(conv_id: str, request: Request):
-    deleted = await delete_conversation(conv_id)
+    user_id = request.state.user["id"]
+    deleted = await delete_conversation(conv_id, user_id=user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
     await emit_history_delete(request.state.user, request, conv_id)
@@ -34,6 +37,7 @@ async def delete_one(conv_id: str, request: Request):
 
 @router.delete("/api/history")
 async def clear_all(request: Request):
-    count = await delete_all_conversations()
+    user_id = request.state.user["id"]
+    count = await delete_all_conversations(user_id=user_id)
     await emit_history_clear(request.state.user, request, count)
     return {"deleted": count}

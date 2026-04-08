@@ -62,6 +62,7 @@ class UserResponse(BaseModel):
 class LoginResponse(BaseModel):
     user: UserResponse
     token: str
+    refresh_token: str | None = None
 
 
 class CreateUserRequest(BaseModel):

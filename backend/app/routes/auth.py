@@ -1,4 +1,3 @@
-import json
 import secrets
 import time
 import uuid
@@ -9,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from ..audit.device import parse_device_info
 from ..audit.emitter import emit_login_failure, emit_login_success, emit_logout
 from ..audit.geo import lookup_ip
+from ..auth.jwt import create_access_token
 from ..config import get_settings
 from ..database import (
     create_session,
@@ -17,6 +17,7 @@ from ..database import (
     end_session_activity,
     get_session_by_token,
     get_user_by_email,
+    get_user_by_id,
     save_login_attempt,
 )
 from ..models import (
@@ -97,21 +98,25 @@ async def login(req: LoginRequest, request: Request, response: Response):
             await emit_login_failure(req.email, request, "wrong_password")
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Create session
+    # Create refresh token (opaque, stored in DB)
     settings = get_settings()
-    token = secrets.token_urlsafe(32)
+    refresh_token = secrets.token_urlsafe(32)
     now = int(time.time() * 1000)
     ttl_ms = settings.session_ttl_hours * 3600 * 1000
     session_id = f"sess-{uuid.uuid4().hex[:12]}"
 
-    await create_session(session_id, user["id"], token, now, now + ttl_ms)
+    await create_session(session_id, user["id"], refresh_token, now, now + ttl_ms)
     await create_session_activity(session_id, user["id"])
     await _record_login_attempt(request, user, success=True, session_id=session_id)
     await emit_login_success(user, request, session_id)
 
+    # Create JWT access token (short-lived, stateless)
+    access_token = create_access_token(user, session_id)
+
+    # Set refresh token as httponly cookie
     response.set_cookie(
-        key="session_token",
-        value=token,
+        key="refresh_token",
+        value=refresh_token,
         httponly=True,
         secure=False,  # Set True in production with HTTPS
         samesite="lax",
@@ -126,8 +131,31 @@ async def login(req: LoginRequest, request: Request, response: Response):
             role=user["role"],
             is_active=user["is_active"],
         ),
-        token=token,
+        token=access_token,
     )
+
+
+@router.post("/api/auth/refresh")
+async def refresh(request: Request, response: Response):
+    """Exchange a valid refresh token for a new JWT access token."""
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No refresh token")
+
+    session = await get_session_by_token(refresh_token)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    now = int(time.time() * 1000)
+    if session["expires_at"] < now:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+
+    user = await get_user_by_id(session["user_id"])
+    if not user or not user["is_active"]:
+        raise HTTPException(status_code=401, detail="Account disabled")
+
+    access_token = create_access_token(user, session["id"])
+    return {"token": access_token}
 
 
 @router.get("/api/auth/me", response_model=UserResponse)
@@ -145,17 +173,24 @@ async def get_current_user(request: Request):
 @router.post("/api/auth/logout")
 async def logout(request: Request, response: Response):
     user = request.state.user
-    token = request.cookies.get("session_token")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-    if token:
-        # End session activity before deleting session
-        session = await get_session_by_token(token)
+
+    # Try to find and delete the refresh token session
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        session = await get_session_by_token(refresh_token)
         if session:
             await end_session_activity(session["id"])
-        await delete_session(token)
+        await delete_session(refresh_token)
+
+    # Also clean up legacy session_token cookie if present
+    legacy_token = request.cookies.get("session_token")
+    if legacy_token:
+        session = await get_session_by_token(legacy_token)
+        if session:
+            await end_session_activity(session["id"])
+        await delete_session(legacy_token)
+
     await emit_logout(user, request)
+    response.delete_cookie("refresh_token")
     response.delete_cookie("session_token")
     return {"logged_out": True}

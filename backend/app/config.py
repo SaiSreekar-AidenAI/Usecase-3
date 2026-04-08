@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     seed_admin_password: str = "admin123"
     seed_admin_name: str = "System Admin"
 
+    # JWT
+    jwt_secret_key: str = "local-dev-secret-change-in-production"
+    jwt_access_token_expire_minutes: int = 30
+
     # Analytics
     event_queue_batch_size: int = 50
     event_queue_flush_interval_s: float = 2.0

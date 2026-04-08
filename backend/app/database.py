@@ -12,6 +12,7 @@ _is_local = False
 _CREATE_CONVERSATIONS = """
     CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY,
+        user_id TEXT,
         query TEXT NOT NULL,
         response TEXT NOT NULL,
         reasoning TEXT,
@@ -111,7 +112,23 @@ _CREATE_TOKEN_USAGE = """
     )
 """
 
+_CREATE_QUERY_CACHE = """
+    CREATE TABLE IF NOT EXISTS query_cache (
+        id TEXT PRIMARY KEY,
+        query_hash TEXT NOT NULL,
+        query_text TEXT NOT NULL,
+        response TEXT NOT NULL,
+        reasoning TEXT,
+        sources_json TEXT,
+        hit_count INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at BIGINT NOT NULL,
+        last_accessed_at BIGINT NOT NULL
+    )
+"""
+
 _CREATE_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_audit_events_user ON audit_events(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_audit_events_type ON audit_events(event_type)",
     "CREATE INDEX IF NOT EXISTS idx_audit_events_ts ON audit_events(timestamp)",
@@ -122,6 +139,8 @@ _CREATE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_session_activity_session ON session_activity(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_query_cache_hash ON query_cache(query_hash)",
+    "CREATE INDEX IF NOT EXISTS idx_query_cache_active ON query_cache(is_active)",
 ]
 
 
@@ -137,8 +156,14 @@ async def init_db() -> None:
         _sqlite_conn.row_factory = aiosqlite.Row
         for ddl in [_CREATE_CONVERSATIONS, _CREATE_USERS, _CREATE_SESSIONS,
                      _CREATE_AUDIT_EVENTS, _CREATE_LOGIN_ATTEMPTS,
-                     _CREATE_SESSION_ACTIVITY, _CREATE_TOKEN_USAGE]:
+                     _CREATE_SESSION_ACTIVITY, _CREATE_TOKEN_USAGE,
+                     _CREATE_QUERY_CACHE]:
             await _sqlite_conn.execute(ddl)
+        # Migration: add user_id to conversations if missing (SQLite has no IF NOT EXISTS for columns)
+        try:
+            await _sqlite_conn.execute("ALTER TABLE conversations ADD COLUMN user_id TEXT")
+        except Exception:
+            pass
         for idx in _CREATE_INDEXES:
             await _sqlite_conn.execute(idx)
         await _sqlite_conn.commit()
@@ -148,8 +173,13 @@ async def init_db() -> None:
         async with _pool.acquire() as conn:
             for ddl in [_CREATE_CONVERSATIONS, _CREATE_USERS, _CREATE_SESSIONS,
                          _CREATE_AUDIT_EVENTS, _CREATE_LOGIN_ATTEMPTS,
-                         _CREATE_SESSION_ACTIVITY, _CREATE_TOKEN_USAGE]:
+                         _CREATE_SESSION_ACTIVITY, _CREATE_TOKEN_USAGE,
+                         _CREATE_QUERY_CACHE]:
                 await conn.execute(ddl)
+            # Migration: add user_id to conversations if missing
+            await conn.execute(
+                "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT"
+            )
             for idx in _CREATE_INDEXES:
                 await conn.execute(idx)
 
@@ -172,6 +202,7 @@ async def save_conversation(
     reasoning: str | None,
     sources: list[dict],
     custom_prompt: str | None,
+    user_id: str,
 ) -> dict:
     conv_id = f"conv-{uuid.uuid4().hex[:8]}"
     ts = int(time.time() * 1000)
@@ -179,17 +210,17 @@ async def save_conversation(
 
     if _is_local:
         await _sqlite_conn.execute(
-            """INSERT INTO conversations (id, query, response, reasoning, sources_json, custom_prompt, timestamp)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (conv_id, query, response, reasoning, sources_json, custom_prompt, ts),
+            """INSERT INTO conversations (id, user_id, query, response, reasoning, sources_json, custom_prompt, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (conv_id, user_id, query, response, reasoning, sources_json, custom_prompt, ts),
         )
         await _sqlite_conn.commit()
     else:
         async with _pool.acquire() as conn:
             await conn.execute(
-                """INSERT INTO conversations (id, query, response, reasoning, sources_json, custom_prompt, timestamp)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-                conv_id, query, response, reasoning, sources_json, custom_prompt, ts,
+                """INSERT INTO conversations (id, user_id, query, response, reasoning, sources_json, custom_prompt, timestamp)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+                conv_id, user_id, query, response, reasoning, sources_json, custom_prompt, ts,
             )
 
     return {
@@ -203,16 +234,18 @@ async def save_conversation(
     }
 
 
-async def get_all_conversations() -> list[dict]:
+async def get_all_conversations(user_id: str) -> list[dict]:
     if _is_local:
         cursor = await _sqlite_conn.execute(
-            "SELECT * FROM conversations ORDER BY timestamp DESC"
+            "SELECT * FROM conversations WHERE user_id = ? ORDER BY timestamp DESC",
+            (user_id,),
         )
         rows = await cursor.fetchall()
     else:
         async with _pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM conversations ORDER BY timestamp DESC"
+                "SELECT * FROM conversations WHERE user_id = $1 ORDER BY timestamp DESC",
+                user_id,
             )
 
     results = []
@@ -229,46 +262,50 @@ async def get_all_conversations() -> list[dict]:
     return results
 
 
-async def update_conversation_response(conv_id: str, response: str) -> bool:
+async def update_conversation_response(conv_id: str, response: str, user_id: str) -> bool:
     if _is_local:
         cursor = await _sqlite_conn.execute(
-            "UPDATE conversations SET response = ? WHERE id = ?",
-            (response, conv_id),
+            "UPDATE conversations SET response = ? WHERE id = ? AND user_id = ?",
+            (response, conv_id, user_id),
         )
         await _sqlite_conn.commit()
         return cursor.rowcount > 0
     else:
         async with _pool.acquire() as conn:
             status = await conn.execute(
-                "UPDATE conversations SET response = $1 WHERE id = $2",
-                response, conv_id,
+                "UPDATE conversations SET response = $1 WHERE id = $2 AND user_id = $3",
+                response, conv_id, user_id,
             )
             return int(status.split()[-1]) > 0
 
 
-async def delete_conversation(conv_id: str) -> bool:
+async def delete_conversation(conv_id: str, user_id: str) -> bool:
     if _is_local:
         cursor = await _sqlite_conn.execute(
-            "DELETE FROM conversations WHERE id = ?", (conv_id,)
+            "DELETE FROM conversations WHERE id = ? AND user_id = ?", (conv_id, user_id)
         )
         await _sqlite_conn.commit()
         return cursor.rowcount > 0
     else:
         async with _pool.acquire() as conn:
             status = await conn.execute(
-                "DELETE FROM conversations WHERE id = $1", conv_id
+                "DELETE FROM conversations WHERE id = $1 AND user_id = $2", conv_id, user_id
             )
             return int(status.split()[-1]) > 0
 
 
-async def delete_all_conversations() -> int:
+async def delete_all_conversations(user_id: str) -> int:
     if _is_local:
-        cursor = await _sqlite_conn.execute("DELETE FROM conversations")
+        cursor = await _sqlite_conn.execute(
+            "DELETE FROM conversations WHERE user_id = ?", (user_id,)
+        )
         await _sqlite_conn.commit()
         return cursor.rowcount
     else:
         async with _pool.acquire() as conn:
-            status = await conn.execute("DELETE FROM conversations")
+            status = await conn.execute(
+                "DELETE FROM conversations WHERE user_id = $1", user_id
+            )
             return int(status.split()[-1])
 
 
@@ -838,6 +875,105 @@ async def save_token_usage(usage: dict) -> None:
                 usage.get("total_tokens", 0), usage.get("thinking_tokens", 0),
                 usage.get("latency_ms", 0), usage["timestamp"],
             )
+
+
+# ── Query Cache ─────────────────────────────────────────────
+
+async def get_cache_by_hash(query_hash: str) -> dict | None:
+    if _is_local:
+        cursor = await _sqlite_conn.execute(
+            "SELECT * FROM query_cache WHERE query_hash = ? AND is_active = 1",
+            (query_hash,),
+        )
+        row = await cursor.fetchone()
+    else:
+        async with _pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM query_cache WHERE query_hash = $1 AND is_active = 1",
+                query_hash,
+            )
+    if not row:
+        return None
+    return {
+        "id": row["id"],
+        "query_hash": row["query_hash"],
+        "query_text": row["query_text"],
+        "response": row["response"],
+        "reasoning": row["reasoning"],
+        "sources_json": row["sources_json"],
+        "hit_count": row["hit_count"],
+        "created_at": row["created_at"],
+        "last_accessed_at": row["last_accessed_at"],
+    }
+
+
+async def get_all_active_cache_entries() -> list[dict]:
+    if _is_local:
+        cursor = await _sqlite_conn.execute(
+            "SELECT * FROM query_cache WHERE is_active = 1"
+        )
+        rows = await cursor.fetchall()
+    else:
+        async with _pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM query_cache WHERE is_active = 1"
+            )
+    return [
+        {
+            "id": row["id"],
+            "query_text": row["query_text"],
+            "response": row["response"],
+            "reasoning": row["reasoning"],
+            "sources_json": row["sources_json"],
+        }
+        for row in rows
+    ]
+
+
+async def update_cache_hit(cache_id: str) -> None:
+    now = int(time.time() * 1000)
+    if _is_local:
+        await _sqlite_conn.execute(
+            "UPDATE query_cache SET hit_count = hit_count + 1, last_accessed_at = ? WHERE id = ?",
+            (now, cache_id),
+        )
+        await _sqlite_conn.commit()
+    else:
+        async with _pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE query_cache SET hit_count = hit_count + 1, last_accessed_at = $1 WHERE id = $2",
+                now, cache_id,
+            )
+
+
+async def save_cache_entry(
+    query_hash: str,
+    query_text: str,
+    response: str,
+    reasoning: str | None,
+    sources_json: str,
+) -> dict:
+    cache_id = f"qc-{uuid.uuid4().hex[:8]}"
+    now = int(time.time() * 1000)
+    if _is_local:
+        await _sqlite_conn.execute(
+            """INSERT INTO query_cache
+               (id, query_hash, query_text, response, reasoning, sources_json,
+                hit_count, is_active, created_at, last_accessed_at)
+               VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?, ?)""",
+            (cache_id, query_hash, query_text, response, reasoning, sources_json, now, now),
+        )
+        await _sqlite_conn.commit()
+    else:
+        async with _pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO query_cache
+                   (id, query_hash, query_text, response, reasoning, sources_json,
+                    hit_count, is_active, created_at, last_accessed_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, 0, 1, $7, $8)""",
+                cache_id, query_hash, query_text, response, reasoning, sources_json, now, now,
+            )
+    return {"id": cache_id, "query_hash": query_hash, "query_text": query_text}
 
 
 # ── Analytics Queries ───────────────────────────────────────
