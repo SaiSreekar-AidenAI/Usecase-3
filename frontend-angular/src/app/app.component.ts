@@ -10,6 +10,7 @@ import { AuthService } from './core/services/auth.service';
 import { ThemeService } from './core/services/theme.service';
 import { IntroService } from './core/services/intro.service';
 import { HeartbeatService } from './core/services/heartbeat.service';
+import { PageTransitionComponent } from './shared/page-transition/page-transition.component';
 
 /**
  * Root shell.
@@ -23,9 +24,12 @@ import { HeartbeatService } from './core/services/heartbeat.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, PageTransitionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<router-outlet />`,
+  template: `
+    <router-outlet />
+    <app-page-transition />
+  `,
 })
 export class AppComponent {
   private auth = inject(AuthService);

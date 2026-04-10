@@ -1,0 +1,33 @@
+.wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* covering: sweep in from the left */
+.wipe--covering {
+  transform: scaleX(1);
+  transform-origin: left center;
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* revealing: sweep out to the right */
+.wipe--revealing {
+  transform: scaleX(0);
+  transform-origin: right center;
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wipe,
+  .wipe--covering,
+  .wipe--revealing {
+    transition: none;
+    transform: scaleX(0);
+  }
+}

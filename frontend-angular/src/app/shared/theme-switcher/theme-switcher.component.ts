@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   ViewEncapsulation,
   computed,
   inject,
@@ -60,11 +61,20 @@ import { ThemeService } from '../../core/services/theme.service';
   `,
 })
 export class ThemeSwitcherComponent {
+  private hostEl = inject(ElementRef<HTMLElement>);
   protected theme = inject(ThemeService);
   protected hovered = signal(false);
   protected isDark = computed(() => this.theme.theme() === 'dark');
 
   onToggle(): void {
-    this.theme.toggleTheme();
+    const btn = (this.hostEl.nativeElement as HTMLElement).querySelector(
+      '.theme-switch',
+    ) as HTMLElement | null;
+    let origin: { x: number; y: number } | undefined;
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+    this.theme.toggleTheme(origin);
   }
 }
