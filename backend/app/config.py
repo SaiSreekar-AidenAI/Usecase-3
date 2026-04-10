@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     chroma_persist_dir: str = str(Path(__file__).resolve().parent.parent / "data" / "chroma")
 
     # BigQuery vector store — production only
-    gcp_project_id: str = "resolve-490813"
-    bq_dataset: str = "resolve_vectors"
+    gcp_project_id: str = "gtm-cloud-helpdesk"
+    bq_dataset: str = "email_composer_vectors"
     bq_table: str = "canned_responses"
 
     # Vertex AI embeddings — production only
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # Auth
     session_ttl_hours: int = 24
-    seed_admin_email: str = "admin@resolve.ai"
+    seed_admin_email: str = "admin@email-composer.ai"
     seed_admin_password: str = "admin123"
     seed_admin_name: str = "System Admin"
 

@@ -118,9 +118,19 @@ async def login(req: LoginRequest, request: Request, response: Response):
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,  # Set True in production with HTTPS
+        secure=True,
         samesite="lax",
         max_age=settings.session_ttl_hours * 3600,
+    )
+
+    # Set JWT as cookie too (avoids Authorization header issues with Cloud Shell proxy)
+    response.set_cookie(
+        key="session_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.jwt_access_token_expire_minutes * 60,
     )
 
     return LoginResponse(

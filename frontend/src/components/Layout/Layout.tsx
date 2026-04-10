@@ -108,7 +108,7 @@ export function Layout({ sidebar, children }: LayoutProps) {
                 animate={sidebarReady ? { clipPath: 'inset(0 0% 0 0)' } : { clipPath: 'inset(0 100% 0 0)' }}
                 transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94], delay: introDone ? 0 : 0.2 }}
               >
-                Resolve
+                Email Composer
               </motion.h1>
               {/* Subtitle: fade + letter-spacing tighten */}
               <motion.p
@@ -259,7 +259,7 @@ export function Layout({ sidebar, children }: LayoutProps) {
           >
             {sidebarOpen ? '\u2715' : '\u2630'}
           </button>
-          <span className="main__mobile-title">Resolve</span>
+          <span className="main__mobile-title">Email Composer</span>
           <div className="main__topbar-right">
             <ThemeSwitcher />
           </div>

@@ -1,8 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from app.audit.event_queue import start_event_processor, stop_event_processor
 from app.audit.geo import close_client as close_geo_client
@@ -64,7 +67,7 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
-app = FastAPI(title="Resolve AI Support Console API", lifespan=lifespan)
+app = FastAPI(title="Email Composer AI API", lifespan=lifespan)
 
 settings = get_settings()
 origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
@@ -99,6 +102,22 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(analytics.router)
 
+# Serve React frontend build (same origin = no CORS issues)
+# Check Docker path first, then local dev path
+_frontend_build = Path(__file__).resolve().parent / "frontend-build"
+if not _frontend_build.is_dir():
+    _frontend_build = Path(__file__).resolve().parent.parent / "frontend" / "build"
+if _frontend_build.is_dir():
+    app.mount("/static", StaticFiles(directory=_frontend_build / "static"), name="static-files")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(request: Request, full_path: str):
+        # Serve actual files if they exist, otherwise index.html for client-side routing
+        file_path = _frontend_build / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(_frontend_build / "index.html")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)

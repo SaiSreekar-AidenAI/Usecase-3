@@ -14,7 +14,11 @@ _client: genai.Client | None = None
 def init_client() -> None:
     global _client
     settings = get_settings()
-    _client = genai.Client(api_key=settings.gemini_api_key)
+    _client = genai.Client(
+        vertexai=True,
+        project=settings.gcp_project_id,
+        location=settings.embedding_location,
+    )
 
 
 def _parse_delimited(text: str) -> tuple[str, str]:

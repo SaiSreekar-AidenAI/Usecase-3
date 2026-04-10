@@ -1,0 +1,50 @@
+.overview-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.overview-tab__cards,
+.overview-tab__stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-md);
+}
+
+.overview-tab__chart-card {
+  padding: var(--space-lg);
+  background: var(--color-bg-secondary);
+  background-image: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.overview-tab__chart-title {
+  font: var(--text-heading);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-md);
+}
+
+/* ngx-charts requires its container to have explicit dimensions for
+   the fluid (no [view]) layout. */
+.overview-tab__chart {
+  width: 100%;
+  height: 320px;
+}
+
+.overview-tab__chart ngx-charts-area-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ngx-charts axis & tooltip overrides — match the design system tokens */
+.overview-tab__chart .ngx-charts text {
+  fill: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.overview-tab__chart .ngx-charts .gridline-path {
+  stroke: var(--color-border-faint);
+}

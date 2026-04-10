@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { AppState, AppAction } from '../types';
 
-const STORAGE_KEY = 'resolve_app_state';
+const STORAGE_KEY = 'email_composer_app_state';
 
 function loadPersistedState(): Partial<AppState> {
   try {

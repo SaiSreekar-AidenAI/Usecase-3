@@ -14,7 +14,7 @@ const ThemeContext = createContext<ThemeContextType>({
   toggleTheme: () => {},
 });
 
-const STORAGE_KEY = 'resolve-theme';
+const STORAGE_KEY = 'email-composer-theme';
 
 function getInitialTheme(): Theme {
   try {

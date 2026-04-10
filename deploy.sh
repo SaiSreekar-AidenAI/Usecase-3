@@ -2,15 +2,15 @@
 set -uo pipefail
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-PROJECT_ID="resolve-490813"
+PROJECT_ID="gtm-cloud-helpdesk"
 REGION="us-central1"
-REPO="us-central1-docker.pkg.dev/${PROJECT_ID}/resolve-repo"
+REPO="us-central1-docker.pkg.dev/${PROJECT_ID}/email-composer-repo"
 
-BACKEND_IMAGE="${REPO}/resolve-backend:v1"
-FRONTEND_IMAGE="${REPO}/resolve-frontend:v1"
-BACKEND_SERVICE="resolve-backend"
-FRONTEND_SERVICE="resolve-frontend"
-BACKEND_URL="https://resolve-backend-147155498924.us-central1.run.app"
+BACKEND_IMAGE="${REPO}/email-composer-backend:v1"
+FRONTEND_IMAGE="${REPO}/email-composer-frontend:v1"
+BACKEND_SERVICE="email-composer-backend"
+FRONTEND_SERVICE="email-composer-frontend"
+BACKEND_URL=""  # Set after first deploy
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -273,7 +273,7 @@ show_help() {
 
   Usage: ./deploy.sh [backend] [frontend] [-h|--help]
 
-  Deploy the Resolve app to Google Cloud Run.
+  Deploy the Email Composer app to Google Cloud Run.
 
   Arguments:
     backend     Deploy only the backend service

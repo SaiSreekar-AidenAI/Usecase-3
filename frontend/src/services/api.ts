@@ -5,13 +5,11 @@ import {
   TokenByUser, SecurityAlert, HeatmapCell,
 } from '../types';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000';
+const API_BASE = process.env.REACT_APP_API_BASE || '';
 let historyInFlight: Promise<Conversation[]> | null = null;
 
 function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('resolve_session_token');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
   try {
     headers['X-Device-Info'] = JSON.stringify({
       screen: `${window.screen.width}x${window.screen.height}`,
@@ -28,15 +26,7 @@ function authHeaders(): Record<string, string> {
  */
 async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
   const headers = { ...authHeaders(), ...(options?.headers as Record<string, string> || {}) };
-  const res = await fetch(url, { ...options, headers, credentials: 'include' });
-
-  // Pick up refreshed JWT from response header
-  const newToken = res.headers.get('X-Access-Token');
-  if (newToken) {
-    localStorage.setItem('resolve_session_token', newToken);
-  }
-
-  return res;
+  return fetch(url, { ...options, headers, credentials: 'include' });
 }
 
 // ── Existing API functions (now with auth) ──────────────────

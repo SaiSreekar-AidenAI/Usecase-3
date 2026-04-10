@@ -1,0 +1,15 @@
+.action-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.action-bar__left {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.action-bar__right {
+  margin-left: auto;
+}

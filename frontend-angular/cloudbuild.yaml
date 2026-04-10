@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo/email-composer-frontend-angular:v1'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo/email-composer-frontend-angular:v1'
+substitutions:
+  _BACKEND_URL: ''  # Set after first deploy if you wire it through environment.prod.ts

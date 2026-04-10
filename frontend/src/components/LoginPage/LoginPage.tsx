@@ -136,7 +136,7 @@ export function LoginPage() {
               animate={{ clipPath: 'inset(0 0% 0 0)' }}
               transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94], delay: 0.4 }}
             >
-              Resolve
+              Email Composer
             </motion.h1>
           </motion.div>
 
@@ -210,7 +210,7 @@ export function LoginPage() {
             <div className="login-page__card-logo-sm">
               <span className="login-page__card-logo-sm-mark">{'/'}{'/'}</span>
             </div>
-            <span className="login-page__card-brand-name">Resolve</span>
+            <span className="login-page__card-brand-name">Email Composer</span>
           </div>
 
           <div className="login-page__card-header">

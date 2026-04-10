@@ -21,8 +21,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
 
-        # Skip public paths and CORS preflight
-        if path in PUBLIC_PATHS or method == "OPTIONS":
+        # Skip non-API paths (frontend static files) and CORS preflight
+        if not path.startswith("/api") or path in PUBLIC_PATHS or method == "OPTIONS":
             return await call_next(request)
 
         # Extract token from Authorization header or cookie
@@ -105,6 +105,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         if new_jwt:
             response.headers["X-Access-Token"] = new_jwt
+            response.set_cookie(
+                key="session_token",
+                value=new_jwt,
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                max_age=1800,
+            )
 
         return response
 

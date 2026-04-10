@@ -1,0 +1,14 @@
+**/.venv
+**/__pycache__
+**/node_modules
+**/build
+**/.git
+**/.env
+backend/data/
+backend/uv.lock
+frontend/build
+*.md
+*.pdf
+*.docx
+deploy.sh
+deploy-single.sh

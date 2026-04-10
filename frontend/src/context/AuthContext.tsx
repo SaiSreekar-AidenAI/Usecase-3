@@ -13,8 +13,6 @@ interface AuthContextType {
   isAdmin: boolean;
 }
 
-const TOKEN_KEY = 'resolve_session_token';
-
 const AuthContext = createContext<AuthContextType>({
   user: null,
   status: 'loading',
@@ -28,20 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<AuthStatus>('loading');
 
-  // On mount: try to restore session
+  // On mount: try to restore session via cookie (sent automatically)
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      setStatus('unauthenticated');
-      return;
-    }
     fetchCurrentUser()
       .then((u) => {
         setUser(u);
         setStatus('authenticated');
       })
       .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
         setStatus('unauthenticated');
       });
   }, []);
@@ -53,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password?: string) => {
     const result = await loginUser(email, password);
-    localStorage.setItem(TOKEN_KEY, result.token);
     setUser(result.user);
     setStatus('authenticated');
   }, []);
@@ -64,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Proceed even if server call fails
     }
-    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setStatus('unauthenticated');
   }, []);
