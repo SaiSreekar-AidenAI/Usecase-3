@@ -139,10 +139,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         enforcer = get_enforcer()
         return enforcer.enforce(role, path, method)
 
+    # Routine session-presence pings — clients hit these on a timer, so a
+    # stale tab whose session has expired would otherwise spam the audit log
+    # with "unauthorized_access" forever. They are not meaningful security
+    # events on their own.
+    _AUDIT_EXEMPT_PATHS = frozenset({
+        "/api/auth/me",
+        "/api/analytics/heartbeat",
+    })
+
     @staticmethod
     async def _emit_unauthorized(request: Request, path: str, reason: str) -> None:
-        # Don't audit /auth/me — it's a routine "am I logged in?" check
-        if path == "/api/auth/me":
+        if path in AuthMiddleware._AUDIT_EXEMPT_PATHS:
             return
         try:
             from ..audit.emitter import emit_unauthorized_access
