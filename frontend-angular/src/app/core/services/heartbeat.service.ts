@@ -1,4 +1,5 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService } from './api.service';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -27,7 +28,16 @@ export class HeartbeatService implements OnDestroy {
     this.lastActivity = Date.now();
     this.intervalId = window.setInterval(() => {
       const idle = Date.now() - this.lastActivity > IDLE_THRESHOLD_MS;
-      this.api.sendHeartbeat(!idle).subscribe();
+      this.api.sendHeartbeat(!idle).subscribe({
+        error: (err) => {
+          // Session is gone — stop the timer so we don't spam the audit log
+          // from a stale tab. AuthService will tear us down on its own when
+          // the user reauthenticates and the auth signal flips back.
+          if (err instanceof HttpErrorResponse && (err.status === 401 || err.status === 403)) {
+            this.stopTracking();
+          }
+        },
+      });
     }, HEARTBEAT_INTERVAL_MS);
   }
 

@@ -1,4 +1,5 @@
 import { Injectable, computed, inject } from '@angular/core';
+import { Color, ScaleType } from '@swimlane/ngx-charts';
 import { ThemeService } from '../../core/services/theme.service';
 
 export interface ChartColors {
@@ -23,30 +24,30 @@ export interface ChartColors {
 export class ChartThemeService {
   private theme = inject(ThemeService);
 
-  readonly isDark = computed(() => this.theme.theme() === 'obsidian');
+  readonly isDark = computed(() => this.theme.theme() === 'dark');
 
   readonly colors = computed<ChartColors>(() => {
     const isDark = this.isDark();
     return {
-      primary: isDark ? '#c99a2e' : '#b8602c',
-      secondary: isDark ? '#4d9960' : '#3d7f4d',
-      tertiary: isDark ? '#c46b5a' : '#5a7a8a',
-      danger: isDark ? '#c45454' : '#a84040',
-      grid: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)',
-      text: isDark ? '#8a8478' : '#6b655a',
-      textLight: isDark ? '#5e584e' : '#948d82',
-      bg: 'transparent',
-      tooltip: isDark ? '#16161a' : '#eae5dc',
-      tooltipBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+      primary:       isDark ? '#60a5fa' : '#3b82f6',
+      secondary:     isDark ? '#22d3ee' : '#0891b2',
+      tertiary:      isDark ? '#a78bfa' : '#8b5cf6',
+      danger:        isDark ? '#f43f5e' : '#e11d48',
+      grid:          isDark ? 'rgba(148,180,236,0.08)' : 'rgba(30,64,175,0.08)',
+      text:          isDark ? '#a8b8d6' : '#4b6485',
+      textLight:     isDark ? '#6b7ea0' : '#8497b6',
+      bg:            'transparent',
+      tooltip:       isDark ? 'rgba(18,28,54,0.92)' : 'rgba(255,255,255,0.92)',
+      tooltipBorder: isDark ? 'rgba(148,180,236,0.18)' : 'rgba(59,130,246,0.25)',
     };
   });
 
   /** Convenience: ngx-charts colorScheme for a series of colors. */
-  schemeFor(colors: string[]): { name: string; selectable: boolean; group: 'Ordinal'; domain: string[] } {
+  schemeFor(colors: string[]): Color {
     return {
       name: 'resolve',
       selectable: true,
-      group: 'Ordinal',
+      group: ScaleType.Ordinal,
       domain: colors,
     };
   }

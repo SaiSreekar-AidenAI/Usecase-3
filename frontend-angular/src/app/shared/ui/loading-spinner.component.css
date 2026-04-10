@@ -59,7 +59,7 @@
   inset: 14px;
   border: 1px solid transparent;
   border-bottom-color: var(--color-highlight);
-  border-left-color: rgba(196, 107, 90, 0.3);
+  border-left-color: var(--color-highlight-subtle);
   filter: drop-shadow(0 0 6px var(--color-highlight-subtle));
   animation: ringSpin 5s linear infinite reverse;
 }

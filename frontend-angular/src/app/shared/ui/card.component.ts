@@ -31,7 +31,7 @@ import {
   `,
 })
 export class CardComponent {
-  private host = inject(ElementRef<HTMLElement>);
+  private host: ElementRef<HTMLElement> = inject(ElementRef);
 
   /** Additional class names appended to the inner `.card` element. */
   variant = input<string>('');

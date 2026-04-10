@@ -15,7 +15,9 @@
   width: 300px;
   flex-shrink: 0;
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--color-border);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border-right: 1px solid var(--color-glass-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -24,8 +26,14 @@
   transform: translateX(-300px);
   opacity: 0;
   transition:
+    width 400ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 600ms cubic-bezier(0.16, 1, 0.3, 1),
     opacity 600ms ease-out;
+}
+
+/* Collapsed rail — icon-sized column */
+.sidebar.sidebar--collapsed {
+  width: 76px;
 }
 
 .app-shell.intro-sidebar .sidebar {
@@ -125,13 +133,12 @@
 }
 
 .sidebar__logo-mark {
-  font-weight: 900;
-  font-size: 22px;
+  width: 24px;
+  height: 24px;
   color: var(--color-text-inverse);
-  letter-spacing: -5px;
   position: relative;
   z-index: 1;
-  font-family: var(--font-display);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 }
 
 .sidebar__title {
@@ -344,6 +351,165 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
+   COLLAPSE TOGGLE — integrated strip above the sidebar footer
+   Matches the nav-btn / divider aesthetic so it reads as native chrome.
+   ════════════════════════════════════════════════════════════════════ */
+.sidebar__collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px var(--space-lg);
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--sidebar-divider);
+  color: var(--color-text-tertiary);
+  font: var(--text-micro);
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 400ms ease-out 390ms,
+    transform 400ms ease-out 390ms,
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.app-shell.intro-sidebar .sidebar__collapse-toggle {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sidebar__collapse-toggle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--color-glass-hover), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.sidebar__collapse-toggle:hover {
+  color: var(--color-accent-text);
+  border-top-color: var(--color-border-hover);
+}
+.sidebar__collapse-toggle:hover::before {
+  opacity: 1;
+}
+
+.sidebar__collapse-toggle:focus-visible {
+  outline: none;
+  color: var(--color-accent-text);
+  box-shadow: inset 0 0 0 1px var(--color-border-focus);
+}
+
+.sidebar__collapse-toggle-icon {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transition: transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar__collapse-toggle:hover .sidebar__collapse-toggle-icon {
+  transform: translateX(-2px);
+}
+
+.sidebar__collapse-toggle-label {
+  position: relative;
+  z-index: 1;
+  transition: opacity 180ms ease-out, transform 180ms ease-out;
+}
+
+/* Collapsed state — icon only, centered, flipped */
+.sidebar--collapsed .sidebar__collapse-toggle {
+  padding: 12px 0;
+  gap: 0;
+}
+.sidebar--collapsed .sidebar__collapse-toggle-label {
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sidebar--collapsed .sidebar__collapse-toggle-icon {
+  transform: scaleX(-1);
+}
+.sidebar--collapsed .sidebar__collapse-toggle:hover .sidebar__collapse-toggle-icon {
+  transform: scaleX(-1) translateX(-2px);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   COLLAPSED SIDEBAR STATES
+   ════════════════════════════════════════════════════════════════════ */
+.sidebar--collapsed .sidebar__header {
+  padding: var(--space-lg) 0 0;
+  display: flex;
+  justify-content: center;
+}
+.sidebar--collapsed .sidebar__brand {
+  justify-content: center;
+  gap: 0;
+}
+.sidebar--collapsed .sidebar__brand-text,
+.sidebar--collapsed .sidebar__accent-bar,
+.sidebar--collapsed .sidebar__content,
+.sidebar--collapsed .sidebar__user-info,
+.sidebar--collapsed .sidebar__version,
+.sidebar--collapsed .sidebar__status-label {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  margin: 0;
+  padding: 0;
+  transition: opacity 180ms ease-out;
+}
+.sidebar--collapsed .sidebar__user-section {
+  padding: var(--space-sm) var(--space-xs);
+}
+.sidebar--collapsed .sidebar__user-actions {
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.sidebar--collapsed .sidebar__nav-btn {
+  padding: 10px 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0; /* hide text */
+  position: relative;
+}
+.sidebar--collapsed .sidebar__nav-btn::before {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  font-family: var(--font-display);
+}
+.sidebar--collapsed .sidebar__nav-btn:not(.sidebar__nav-btn--logout):nth-of-type(1)::before { content: 'A'; }
+.sidebar--collapsed .sidebar__nav-btn:not(.sidebar__nav-btn--logout):nth-of-type(2)::before { content: 'U'; }
+.sidebar--collapsed .sidebar__nav-btn--logout::before { content: '⎋'; font-size: 14px; }
+.sidebar--collapsed .sidebar__footer {
+  padding: var(--space-sm) 0 var(--space-md);
+  justify-content: center;
+}
+.sidebar--collapsed .sidebar__status {
+  gap: 0;
+}
+/* Keep the hover-accent right-edge gradient hidden when collapsed (cleaner) */
+.sidebar--collapsed::after {
+  opacity: 0.5;
+}
+
+/* ════════════════════════════════════════════════════════════════════
    MAIN
    ════════════════════════════════════════════════════════════════════ */
 .main {
@@ -481,10 +647,10 @@
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-xl);
-  border-bottom: 1px solid var(--color-border-faint);
-  background: rgba(0, 0, 0, 0.01);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-glass-border);
+  background: var(--color-glass);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
   flex-shrink: 0;
   min-height: 52px;
   position: relative;
@@ -503,6 +669,83 @@
 .main__menu-btn { display: none; }
 .main__mobile-title { display: none; }
 .main__topbar-right { margin-left: auto; }
+
+/* ════════════════════════════════════════════════════════════════════
+   TOPBAR TICKER — continuous horizontal scroll of product/user strings
+   Pure CSS marquee, intro-gated, hover-pausable, reduced-motion aware.
+   ════════════════════════════════════════════════════════════════════ */
+.main__ticker {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  margin: 0 var(--space-lg);
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+}
+
+.main__ticker-track {
+  display: inline-flex;
+  gap: var(--space-2xl);
+  white-space: nowrap;
+  animation: tickerScroll 60s linear infinite;
+  animation-play-state: paused;
+  will-change: transform;
+}
+
+.app-shell.intro-topbar .main__ticker-track {
+  animation-play-state: running;
+}
+
+.main__ticker:hover .main__ticker-track {
+  animation-play-state: paused;
+}
+
+@keyframes tickerScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.main__ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font: var(--text-micro);
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+}
+
+.main__ticker-item:hover {
+  color: var(--color-accent-text);
+}
+
+.main__ticker-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 6px var(--color-accent-glow);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main__ticker-track { animation: none; }
+}
 
 .main__scroll {
   flex: 1;
@@ -527,9 +770,12 @@
 
 /* ═══ Responsive ═══ */
 @media (max-width: 768px) {
-  .sidebar {
+  /* On mobile, the sidebar is a slide-in overlay — desktop collapse doesn't apply */
+  .sidebar,
+  .sidebar.sidebar--collapsed {
     position: fixed;
     top: 0; left: 0; bottom: 0;
+    width: 300px;
     z-index: 100;
     transform: translateX(-100%);
     transition: transform 300ms var(--ease-out-expo);
@@ -539,14 +785,50 @@
   .sidebar.sidebar--open,
   .app-shell.intro-sidebar .sidebar.sidebar--open { transform: translateX(0); }
 
+  /* Hide the desktop collapse toggle on mobile */
+  .sidebar__collapse-toggle { display: none; }
+
+  /* Topbar ticker is a desktop flourish — hide on mobile where space is tight */
+  .main__ticker { display: none; }
+
+  /* Reset collapsed content rules on mobile (full sidebar shown) */
+  .sidebar.sidebar--collapsed .sidebar__header {
+    padding: var(--space-lg) var(--space-lg) 0;
+    display: block;
+  }
+  .sidebar.sidebar--collapsed .sidebar__brand {
+    justify-content: flex-start;
+    gap: 14px;
+  }
+  .sidebar.sidebar--collapsed .sidebar__brand-text,
+  .sidebar.sidebar--collapsed .sidebar__accent-bar,
+  .sidebar.sidebar--collapsed .sidebar__content,
+  .sidebar.sidebar--collapsed .sidebar__user-info,
+  .sidebar.sidebar--collapsed .sidebar__version,
+  .sidebar.sidebar--collapsed .sidebar__status-label {
+    opacity: 1;
+    width: auto;
+    max-width: none;
+    overflow: visible;
+    pointer-events: auto;
+  }
+  .sidebar.sidebar--collapsed .sidebar__user-actions {
+    flex-direction: row;
+  }
+  .sidebar.sidebar--collapsed .sidebar__nav-btn {
+    padding: 6px 12px;
+    font-size: 10px;
+  }
+  .sidebar.sidebar--collapsed .sidebar__nav-btn::before { content: none; }
+
   .app-shell__overlay {
     display: block;
     position: fixed;
     inset: 0;
     z-index: 99;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(5, 9, 20, 0.65);
+    backdrop-filter: var(--blur-md);
+    -webkit-backdrop-filter: var(--blur-md);
     animation: overlayFade 250ms ease-out;
   }
 

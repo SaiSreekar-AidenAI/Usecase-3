@@ -54,7 +54,7 @@ import { ThemeService } from '../../core/services/theme.service';
       </div>
 
       @if (hovered()) {
-        <span class="theme-switch__label">{{ isDark() ? 'Obsidian' : 'Paper' }}</span>
+        <span class="theme-switch__label">{{ isDark() ? 'Dark' : 'Light' }}</span>
       }
     </button>
   `,
@@ -62,7 +62,7 @@ import { ThemeService } from '../../core/services/theme.service';
 export class ThemeSwitcherComponent {
   protected theme = inject(ThemeService);
   protected hovered = signal(false);
-  protected isDark = computed(() => this.theme.theme() === 'obsidian');
+  protected isDark = computed(() => this.theme.theme() === 'dark');
 
   onToggle(): void {
     this.theme.toggleTheme();

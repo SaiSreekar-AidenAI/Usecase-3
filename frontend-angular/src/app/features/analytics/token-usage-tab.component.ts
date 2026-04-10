@@ -95,10 +95,37 @@ interface TopUserRow {
           <h3 class="token-tab__chart-title">Token Breakdown</h3>
           @if (pieData().length > 0) {
             <div class="token-tab__pie">
-              <ngx-charts-advanced-pie-chart
+              <ngx-charts-pie-chart
                 [results]="pieData()"
                 [scheme]="pieScheme()"
-              ></ngx-charts-advanced-pie-chart>
+                [doughnut]="true"
+                [arcWidth]="0.42"
+                [legend]="false"
+                [labels]="false"
+                [tooltipDisabled]="false"
+              ></ngx-charts-pie-chart>
+              <div class="token-tab__pie-center">
+                <span class="token-tab__pie-center-value">
+                  {{ totalTokens().toLocaleString() }}
+                </span>
+                <span class="token-tab__pie-center-label">Total Tokens</span>
+              </div>
+            </div>
+            <div class="token-tab__pie-totals">
+              @for (slice of pieData(); track slice.name; let i = $index) {
+                <div class="token-tab__pie-total">
+                  <span
+                    class="token-tab__pie-total-swatch"
+                    [style.background]="sliceColor(i)"
+                  ></span>
+                  <div class="token-tab__pie-total-text">
+                    <span class="token-tab__pie-total-label">{{ slice.name }}</span>
+                    <span class="token-tab__pie-total-value">
+                      {{ slice.value.toLocaleString() }}
+                    </span>
+                  </div>
+                </div>
+              }
             </div>
           } @else {
             <div class="token-tab__empty">No data yet</div>
@@ -232,6 +259,11 @@ export class TokenUsageTabComponent {
 
   protected formatAvg(n: number): string {
     return Math.round(n).toLocaleString();
+  }
+
+  protected sliceColor(index: number): string {
+    const domain = this.pieScheme().domain;
+    return domain[index % domain.length];
   }
 
   constructor() {

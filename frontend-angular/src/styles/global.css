@@ -9,10 +9,17 @@
 
 html {
   font: var(--text-body);
+  font-family: var(--font-body);
   color: var(--color-text-primary);
   background-color: var(--color-bg-void);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
 }
 
 /* Theme crossfade */
@@ -55,13 +62,15 @@ body {
 
 /* Base elements */
 textarea {
-  font: var(--text-mono);
+  font: var(--text-body);
+  font-family: var(--font-body);
   color: var(--color-text-primary);
   resize: none;
 }
 
 button {
   font: var(--text-subheading);
+  font-family: var(--font-body);
   cursor: pointer;
   border: none;
   background: none;

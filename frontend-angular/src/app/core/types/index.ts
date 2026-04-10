@@ -27,7 +27,7 @@ export type ViewName = 'generate' | 'history' | 'user-management' | 'analytics';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
-export type ThemeName = 'obsidian' | 'paper';
+export type ThemeName = 'dark' | 'light';
 
 export type IntroPhase = 'waiting' | 'sidebar' | 'atmosphere' | 'topbar' | 'content' | 'done';
 

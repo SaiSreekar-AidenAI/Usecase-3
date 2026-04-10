@@ -19,8 +19,8 @@ import {
 
 export interface GenerateResult {
   response: string;
-  reasoning: string | null;
-  sources: RetrievedSource[];
+  reasoning?: string | null;
+  sources?: RetrievedSource[];
   conversation: Conversation;
 }
 
@@ -53,13 +53,13 @@ export class ApiService {
   // ── Generate / History ────────────────────────────────
   generateResponse(query: string, customPrompt?: string): Observable<GenerateResult> {
     return this.http
-      .post<{ response: string; reasoning?: string | null; sources?: RetrievedSource[]; conversation: Conversation }>(
+      .post<GenerateResult>(
         `${this.base}/api/generate`,
         { query, customPrompt: customPrompt || null },
       )
       .pipe(
         catchError((err) => throwError(() => new Error(err?.error?.detail ?? 'Failed to generate response'))),
-      ) as Observable<GenerateResult>;
+      );
   }
 
   fetchHistory(): Observable<Conversation[]> {
@@ -211,8 +211,6 @@ export class ApiService {
   }
 
   sendHeartbeat(active: boolean): Observable<void> {
-    return this.http
-      .post<void>(`${this.base}/api/analytics/heartbeat`, { active })
-      .pipe(catchError(() => of(void 0)));
+    return this.http.post<void>(`${this.base}/api/analytics/heartbeat`, { active });
   }
 }

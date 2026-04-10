@@ -20,3 +20,4 @@ data/chroma_data/
 # IDE
 .vscode/
 .idea/
+.gstack/

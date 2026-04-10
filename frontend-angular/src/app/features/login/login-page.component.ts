@@ -15,18 +15,6 @@ import { AuthService } from '../../core/services/auth.service';
 
 type LoginStep = 'email' | 'password' | 'logging-in';
 
-interface Feature {
-  icon: string;
-  title: string;
-  desc: string;
-}
-
-const FEATURES: Feature[] = [
-  { icon: '⚡', title: 'AI-Powered Responses', desc: 'Instant, context-aware support answers' },
-  { icon: '🔒', title: 'Secure & Audited', desc: 'Full session tracking and activity logs' },
-  { icon: '📊', title: 'Real-Time Analytics', desc: 'Usage metrics and performance insights' },
-];
-
 @Component({
   selector: 'app-login-page',
   standalone: true,
@@ -49,26 +37,71 @@ const FEATURES: Feature[] = [
         <div class="login-page__hero-content">
           <div class="login-page__hero-brand">
             <div class="login-page__hero-logo">
-              <span class="login-page__hero-logo-mark">//</span>
+              <svg
+                class="login-page__hero-logo-mark"
+                viewBox="0 0 32 32"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="4" y="8" width="24" height="17" rx="2.5" />
+                <path d="M4 11 L16 19 L28 11" />
+                <path d="M22 5 L23.2 7.3 L25.5 8.5 L23.2 9.7 L22 12 L20.8 9.7 L18.5 8.5 L20.8 7.3 Z" fill="currentColor" stroke="none" />
+              </svg>
               <div class="login-page__hero-logo-burst"></div>
             </div>
             <h1 class="login-page__hero-title">Email Composer</h1>
           </div>
 
-          <p class="login-page__hero-tagline">AI-Powered Support Console</p>
+          <p class="login-page__hero-tagline">Enterprise Support Intelligence</p>
 
           <div class="login-page__hero-divider"></div>
 
           <div class="login-page__hero-features">
-            @for (feat of features; track feat.title; let i = $index) {
-              <div class="login-page__hero-feature" [style.--feat-delay]="0.75 + i * 0.12 + 's'">
-                <span class="login-page__hero-feature-icon">{{ feat.icon }}</span>
-                <div>
-                  <span class="login-page__hero-feature-title">{{ feat.title }}</span>
-                  <span class="login-page__hero-feature-desc">{{ feat.desc }}</span>
-                </div>
+            <div class="login-page__hero-feature" style="--feat-delay: 0.75s">
+              <span class="login-page__hero-feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                  <path d="M20 3v4" />
+                  <path d="M22 5h-4" />
+                  <path d="M4 17v2" />
+                  <path d="M5 18H3" />
+                </svg>
+              </span>
+              <div>
+                <span class="login-page__hero-feature-title">Knowledge-Grounded Responses</span>
+                <span class="login-page__hero-feature-desc">Answers drawn from your verified internal knowledge base</span>
               </div>
-            }
+            </div>
+
+            <div class="login-page__hero-feature" style="--feat-delay: 0.87s">
+              <span class="login-page__hero-feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <div>
+                <span class="login-page__hero-feature-title">Role-Based Access & Audit</span>
+                <span class="login-page__hero-feature-desc">Every session, query, and action tracked for compliance review</span>
+              </div>
+            </div>
+
+            <div class="login-page__hero-feature" style="--feat-delay: 0.99s">
+              <span class="login-page__hero-feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                  <path d="m19 9-5 5-4-4-3 3" />
+                </svg>
+              </span>
+              <div>
+                <span class="login-page__hero-feature-title">Unified Operational Analytics</span>
+                <span class="login-page__hero-feature-desc">Real-time usage, session, and performance insight in one view</span>
+              </div>
+            </div>
           </div>
 
           <div class="login-page__hero-footer">
@@ -84,12 +117,25 @@ const FEATURES: Feature[] = [
       <!-- ═══ RIGHT — Login panel ═══ -->
       <div class="login-page__right">
         <div class="login-page__right-glow"></div>
+        <div class="login-page__right-glow login-page__right-glow--2"></div>
         <div class="login-page__right-noise"></div>
 
         <div class="login-page__card">
           <div class="login-page__card-brand-mobile">
             <div class="login-page__card-logo-sm">
-              <span class="login-page__card-logo-sm-mark">//</span>
+              <svg
+                class="login-page__card-logo-sm-mark"
+                viewBox="0 0 32 32"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="4" y="8" width="24" height="17" rx="2.5" />
+                <path d="M4 11 L16 19 L28 11" />
+              </svg>
             </div>
             <span class="login-page__card-brand-name">Email Composer</span>
           </div>
@@ -162,7 +208,11 @@ const FEATURES: Feature[] = [
                 <app-button type="submit" variant="primary">Sign In</app-button>
 
                 <button type="button" class="login-page__back" (click)="goBack()">
-                  ← Back to email
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m12 19-7-7 7-7" />
+                    <path d="M19 12H5" />
+                  </svg>
+                  Back to email
                 </button>
               </form>
             }
@@ -190,8 +240,6 @@ const FEATURES: Feature[] = [
 export class LoginPageComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
-
-  protected readonly features = FEATURES;
 
   protected step = signal<LoginStep>('email');
   protected email = '';
