@@ -5,25 +5,19 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    env: str = "local"  # "local" or "production"
-
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
-    excel_data_path: str = str(Path(__file__).resolve().parent.parent.parent / "Canned_Responses_Templatefull.xlsx")
+    gemini_model: str = "gemini-3-pro-preview"
+    excel_data_path: str = str(Path(__file__).resolve().parent.parent / "Canned_Responses_Templatefull.xlsx")
 
-    # Cloud SQL (asyncpg DSN) — production only
+    # Cloud SQL (asyncpg DSN)
     database_url: str = ""
 
-    # Local dev paths
-    sqlite_path: str = str(Path(__file__).resolve().parent.parent / "data" / "local.db")
-    chroma_persist_dir: str = str(Path(__file__).resolve().parent.parent / "data" / "chroma")
-
-    # BigQuery vector store — production only
+    # BigQuery vector store
     gcp_project_id: str = "gtm-cloud-helpdesk"
     bq_dataset: str = "email_composer_vectors"
     bq_table: str = "canned_responses"
 
-    # Vertex AI embeddings — production only
+    # Vertex AI embeddings
     embedding_model: str = "text-embedding-005"
     embedding_location: str = "us-central1"
 
@@ -49,10 +43,6 @@ class Settings(BaseSettings):
     security_failed_login_threshold: int = 5
 
     model_config = {"env_file": str(Path(__file__).resolve().parent.parent / ".env")}
-
-    @property
-    def is_local(self) -> bool:
-        return self.env.lower() == "local"
 
 
 @lru_cache

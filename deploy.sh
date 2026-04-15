@@ -2,8 +2,8 @@
 set -uo pipefail
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-PROJECT_ID="gtm-cloud-helpdesk"
-REGION="us-central1"
+PROJECT_ID="${PROJECT_ID:-gtm-cloud-helpdesk}"
+REGION="${REGION:-us-central1}"
 REPO="us-central1-docker.pkg.dev/${PROJECT_ID}/email-composer-repo"
 
 BACKEND_IMAGE="${REPO}/email-composer-backend:v1"
@@ -11,6 +11,17 @@ FRONTEND_IMAGE="${REPO}/email-composer-frontend:v1"
 BACKEND_SERVICE="email-composer-backend"
 FRONTEND_SERVICE="email-composer-frontend"
 BACKEND_URL=""  # Set after first deploy
+
+# Cloud SQL (Postgres) — connected via the Cloud SQL Auth Proxy sidecar in Cloud Run.
+# DATABASE_URL uses asyncpg's Unix-socket form: postgresql://USER:PASS@/DBNAME?host=/cloudsql/INSTANCE
+CLOUD_SQL_INSTANCE="${CLOUD_SQL_INSTANCE:-${PROJECT_ID}:${REGION}:email-composer-db}"
+DB_USER="${DB_USER:-postgres}"
+DB_PASS="${DB_PASS:-}"  # REQUIRED — export DB_PASS before running
+DB_NAME="${DB_NAME:-email_composer}"
+
+# BigQuery vector store
+BQ_DATASET="${BQ_DATASET:-email_composer_vectors}"
+BQ_TABLE="${BQ_TABLE:-canned_responses}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -273,7 +284,35 @@ show_help() {
 
   Usage: ./deploy.sh [backend] [frontend] [-h|--help]
 
-  Deploy the Email Composer app to Google Cloud Run.
+  Deploy the Email Composer app (FastAPI + Angular) to Google Cloud Run.
+  Backend uses Cloud SQL (Postgres via asyncpg) + BigQuery vector search + Vertex AI.
+
+  Required env vars for backend deploy:
+    DB_PASS             Cloud SQL postgres password (REQUIRED)
+
+  Optional overrides:
+    PROJECT_ID          default: gtm-cloud-helpdesk
+    REGION              default: us-central1
+    CLOUD_SQL_INSTANCE  default: \${PROJECT_ID}:\${REGION}:email-composer-db
+    DB_USER             default: postgres
+    DB_NAME             default: email_composer
+    BQ_DATASET          default: email_composer_vectors
+    BQ_TABLE            default: canned_responses
+
+  Prereqs (run once per GCP project):
+    1. gcloud auth login
+    2. Create the Cloud SQL Postgres instance: CLOUD_SQL_INSTANCE
+    3. Create database DB_NAME inside that instance
+    4. Create BigQuery dataset BQ_DATASET (us-central1)
+    5. Create BQ table with schema:
+         id STRING, category STRING, description STRING, response STRING,
+         document STRING, embedding ARRAY<FLOAT64>
+       then create a vector index on 'embedding' (optional but recommended)
+    6. Grant the Cloud Run service account:
+         roles/cloudsql.client
+         roles/aiplatform.user
+         roles/bigquery.dataEditor
+         roles/bigquery.jobUser
 
   Arguments:
     backend     Deploy only the backend service
@@ -310,11 +349,18 @@ main() {
 
   # ── Backend ──
   if $DEPLOY_BACKEND; then
+    if [[ -z "$DB_PASS" ]]; then
+      log_error "DB_PASS env var is required — export DB_PASS=... before running"
+      exit 1
+    fi
+
     run_phase "Build backend image" \
       gcloud builds submit \
         --tag "$BACKEND_IMAGE" \
         --project "$PROJECT_ID" \
         "$SCRIPT_DIR/backend"
+
+    local database_url="postgresql://${DB_USER}:${DB_PASS}@/${DB_NAME}?host=/cloudsql/${CLOUD_SQL_INSTANCE}"
 
     run_phase "Deploy backend to Cloud Run" \
       gcloud run deploy "$BACKEND_SERVICE" \
@@ -322,6 +368,8 @@ main() {
         --region "$REGION" \
         --project "$PROJECT_ID" \
         --allow-unauthenticated \
+        --add-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
+        --set-env-vars "DATABASE_URL=${database_url},GCP_PROJECT_ID=${PROJECT_ID},BQ_DATASET=${BQ_DATASET},BQ_TABLE=${BQ_TABLE},EMBEDDING_LOCATION=${REGION}" \
         --quiet
   fi
 

@@ -1,23 +1,22 @@
-# Stage 1: Build
+# Stage 1: Build the Angular app
 FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
 
-ARG REACT_APP_API_BASE
-ENV REACT_APP_API_BASE=$REACT_APP_API_BASE
+# Production build — emits to dist/frontend/browser via the
+# @angular-devkit/build-angular:application builder.
+RUN npm run build -- --configuration production
 
-RUN npm run build
-
-# Stage 2: Serve
+# Stage 2: Serve the static bundle via nginx
 FROM nginx:alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html
 
 EXPOSE 8080
 

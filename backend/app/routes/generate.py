@@ -25,11 +25,7 @@ router = APIRouter()
 
 
 def _search(query: str, n_results: int = 3) -> list[dict]:
-    settings = get_settings()
-    if settings.is_local:
-        from ..chroma import search_canned_responses
-    else:
-        from ..vector_store import search_canned_responses
+    from ..vector_store import search_canned_responses
     return search_canned_responses(query, n_results=n_results)
 
 

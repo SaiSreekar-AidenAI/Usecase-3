@@ -1,7 +1,6 @@
 .venv/
 __pycache__/
 .env
-data/chroma_data/
-data/conversations.db
+data/
 *.pyc
 .git/
