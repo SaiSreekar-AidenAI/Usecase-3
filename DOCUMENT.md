@@ -59,13 +59,13 @@
 | Layer | Technology | Details |
 |---|---|---|
 | Container Platform | Google Cloud Run | Managed serverless containers |
-| Container Registry | Artifact Registry | us-central1-docker.pkg.dev/resolve-490813/resolve-repo |
+| Container Registry | Artifact Registry | us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo |
 | Build System | Google Cloud Build | cloudbuild.yaml for frontend |
 | Backend Container | Python 3.12 slim | Dockerfile with asyncpg system deps |
 | Frontend Container | Node 20 (build) + Nginx Alpine (serve) | Multi-stage Dockerfile |
 | Web Server | Nginx | SPA routing, static asset caching (1yr), health endpoint |
 | Region | us-central1 | GCP region for all services |
-| GCP Project | resolve-490813 | - |
+| GCP Project | gtm-cloud-helpdesk | - |
 | Deploy Script | Bash (deploy.sh) | Supports selective backend/frontend/both deployment |
 
 ---
@@ -310,7 +310,7 @@ User
 
 ### 4.2 Vector Store Schema
 
-#### BigQuery Table: `resolve_vectors.canned_responses` (Production)
+#### BigQuery Table: `email_composer_vectors.canned_responses` (Production)
 | Column | Type | Description |
 |---|---|---|
 | id | STRING | Format: canned-{index} |

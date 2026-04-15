@@ -392,12 +392,12 @@ When AI generates a response, agents have no insight into why the AI chose a par
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              GOOGLE CLOUD PLATFORM                               │
-│                              Project: resolve-490813                              │
+│                              Project: gtm-cloud-helpdesk                              │
 │                              Region: us-central1                                 │
 │                                                                                  │
 │  ┌─────────────────────────┐       ┌─────────────────────────────────────────┐  │
 │  │   CLOUD RUN             │       │   CLOUD RUN                             │  │
-│  │   resolve-frontend      │       │   resolve-backend                       │  │
+│  │   email-composer-frontend      │       │   email-composer-backend                       │  │
 │  │                         │       │                                         │  │
 │  │  ┌───────────────────┐  │       │  ┌─────────────────────────────────┐   │  │
 │  │  │  Nginx Alpine     │  │       │  │  Python 3.12 + Uvicorn         │   │  │
@@ -417,7 +417,7 @@ When AI generates a response, agents have no insight into why the AI chose a par
 │  ┌─────────────────────────────────────┐    ┌──────────────────────────────┐  │
 │  │         CLOUD SQL                    │    │       BIGQUERY               │  │
 │  │         (PostgreSQL)                 │    │                              │  │
-│  │                                     │    │  Dataset: resolve_vectors    │  │
+│  │                                     │    │  Dataset: email_composer_vectors    │  │
 │  │  Tables:                            │    │  Table: canned_responses     │  │
 │  │  ├─ conversations                   │    │                              │  │
 │  │  ├─ users                           │    │  ┌────────────────────────┐  │  │
@@ -430,9 +430,9 @@ When AI generates a response, agents have no insight into why the AI chose a par
 │                                              │       VERTEX AI             │  │
 │  ┌─────────────────────────────────────┐    │                              │  │
 │  │    ARTIFACT REGISTRY                │    │  Model: text-embedding-005  │  │
-│  │    resolve-repo/                    │    │  Location: us-central1      │  │
-│  │    ├─ resolve-backend:v1            │    └──────────────────────────────┘  │
-│  │    └─ resolve-frontend:v1           │                                      │
+│  │    email-composer-repo/                    │    │  Location: us-central1      │  │
+│  │    ├─ email-composer-backend:v1            │    └──────────────────────────────┘  │
+│  │    └─ email-composer-frontend:v1           │                                      │
 │  └─────────────────────────────────────┘    ┌──────────────────────────────┐  │
 │                                              │    GOOGLE GENERATIVE AI     │  │
 │  ┌─────────────────────────────────────┐    │    (Gemini API)             │  │
@@ -736,7 +736,7 @@ RouteHandler       AuditEmitter        EventQueue          Processor         Dat
 |---|---|
 | **Provider** | Google Cloud SQL |
 | **Engine** | PostgreSQL |
-| **GCP Project** | resolve-490813 |
+| **GCP Project** | gtm-cloud-helpdesk |
 | **Region** | us-central1 |
 | **Connection** | Via `DATABASE_URL` environment variable (asyncpg DSN format) |
 | **Driver** | asyncpg >= 0.30.0 (async PostgreSQL driver) |
@@ -781,23 +781,23 @@ RouteHandler       AuditEmitter        EventQueue          Processor         Dat
 
 | Setting | Value |
 |---|---|
-| Project ID | `resolve-490813` |
+| Project ID | `gtm-cloud-helpdesk` |
 | Region | `us-central1` |
-| Artifact Registry Repository | `resolve-repo` |
-| Artifact Registry Location | `us-central1-docker.pkg.dev/resolve-490813/resolve-repo` |
+| Artifact Registry Repository | `email-composer-repo` |
+| Artifact Registry Location | `us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo` |
 
 ### 12.2 Cloud Run Services
 
 | Service | Image | Port | Auth |
 |---|---|---|---|
-| `resolve-backend` | `resolve-backend:v1` | 8080 | `--allow-unauthenticated` |
-| `resolve-frontend` | `resolve-frontend:v1` | 8080 | `--allow-unauthenticated` |
+| `email-composer-backend` | `email-composer-backend:v1` | 8080 | `--allow-unauthenticated` |
+| `email-composer-frontend` | `email-composer-frontend:v1` | 8080 | `--allow-unauthenticated` |
 
 ### 12.3 BigQuery Configuration
 
 | Setting | Value |
 |---|---|
-| Dataset | `resolve_vectors` |
+| Dataset | `email_composer_vectors` |
 | Table | `canned_responses` |
 | Vector Column | `embedding` (ARRAY\<FLOAT64\>) |
 | Distance Type | COSINE |
@@ -823,14 +823,14 @@ RouteHandler       AuditEmitter        EventQueue          Processor         Dat
 **Frontend Build (`cloudbuild.yaml`):**
 ```
 Builder: gcr.io/cloud-builders/docker
-Substitutions: _BACKEND_URL (default: https://resolve-backend-147155498924.us-central1.run.app)
-Output: us-central1-docker.pkg.dev/resolve-490813/resolve-repo/resolve-frontend:v1
+Substitutions: _BACKEND_URL (default: https://email-composer-backend-147155498924.us-central1.run.app)
+Output: us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo/email-composer-frontend:v1
 ```
 
 **Backend Build (inline via `deploy.sh`):**
 ```
-Command: gcloud builds submit --tag <image> --project resolve-490813 ./backend
-Output: us-central1-docker.pkg.dev/resolve-490813/resolve-repo/resolve-backend:v1
+Command: gcloud builds submit --tag <image> --project gtm-cloud-helpdesk ./backend
+Output: us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo/email-composer-backend:v1
 ```
 
 ### 12.7 Environment Variables
@@ -844,8 +844,8 @@ Output: us-central1-docker.pkg.dev/resolve-490813/resolve-repo/resolve-backend:v
 | `EXCEL_DATA_PATH` | Dockerfile | `/data/Canned_Responses_Templatefull.xlsx` |
 | `GEMINI_API_KEY` | .env / runtime | Google Generative AI API key |
 | `DATABASE_URL` | runtime | Cloud SQL asyncpg connection string |
-| `GCP_PROJECT_ID` | config default | `resolve-490813` |
-| `BQ_DATASET` | config default | `resolve_vectors` |
+| `GCP_PROJECT_ID` | config default | `gtm-cloud-helpdesk` |
+| `BQ_DATASET` | config default | `email_composer_vectors` |
 | `BQ_TABLE` | config default | `canned_responses` |
 
 **Frontend (Build-time):**
@@ -859,10 +859,10 @@ Output: us-central1-docker.pkg.dev/resolve-490813/resolve-repo/resolve-backend:v
 | Phase | Command |
 |---|---|
 | Auth check | `gcloud auth print-identity-token` |
-| Backend build | `gcloud builds submit --tag <image> --project resolve-490813 ./backend` |
-| Backend deploy | `gcloud run deploy resolve-backend --image <image> --region us-central1 --allow-unauthenticated` |
+| Backend build | `gcloud builds submit --tag <image> --project gtm-cloud-helpdesk ./backend` |
+| Backend deploy | `gcloud run deploy email-composer-backend --image <image> --region us-central1 --allow-unauthenticated` |
 | Frontend build | `gcloud builds submit --config cloudbuild.yaml --substitutions=_BACKEND_URL=<url> ./frontend` |
-| Frontend deploy | `gcloud run deploy resolve-frontend --image <image> --region us-central1 --allow-unauthenticated` |
+| Frontend deploy | `gcloud run deploy email-composer-frontend --image <image> --region us-central1 --allow-unauthenticated` |
 | URL retrieval | `gcloud run services describe <service> --format='value(status.url)'` |
 
 ---
@@ -1235,8 +1235,8 @@ The application startup/shutdown lifecycle manager.
 | `database_url` | str | `""` | Production DB connection string |
 | `sqlite_path` | str | (computed) | Local SQLite file path |
 | `chroma_persist_dir` | str | (computed) | ChromaDB persistence directory |
-| `gcp_project_id` | str | `"resolve-490813"` | GCP project ID |
-| `bq_dataset` | str | `"resolve_vectors"` | BigQuery dataset |
+| `gcp_project_id` | str | `"gtm-cloud-helpdesk"` | GCP project ID |
+| `bq_dataset` | str | `"email_composer_vectors"` | BigQuery dataset |
 | `bq_table` | str | `"canned_responses"` | BigQuery table |
 | `embedding_model` | str | `"text-embedding-005"` | Vertex AI model |
 | `embedding_location` | str | `"us-central1"` | Vertex AI region |
@@ -1914,14 +1914,14 @@ All functions support both SQLite and PostgreSQL via conditional logic on `_is_l
 
 | Variable | Value |
 |---|---|
-| `PROJECT_ID` | `"resolve-490813"` |
+| `PROJECT_ID` | `"gtm-cloud-helpdesk"` |
 | `REGION` | `"us-central1"` |
-| `REPO` | `"us-central1-docker.pkg.dev/${PROJECT_ID}/resolve-repo"` |
-| `BACKEND_IMAGE` | `"${REPO}/resolve-backend:v1"` |
-| `FRONTEND_IMAGE` | `"${REPO}/resolve-frontend:v1"` |
-| `BACKEND_SERVICE` | `"resolve-backend"` |
-| `FRONTEND_SERVICE` | `"resolve-frontend"` |
-| `BACKEND_URL` | `"https://resolve-backend-147155498924.us-central1.run.app"` |
+| `REPO` | `"us-central1-docker.pkg.dev/${PROJECT_ID}/email-composer-repo"` |
+| `BACKEND_IMAGE` | `"${REPO}/email-composer-backend:v1"` |
+| `FRONTEND_IMAGE` | `"${REPO}/email-composer-frontend:v1"` |
+| `BACKEND_SERVICE` | `"email-composer-backend"` |
+| `FRONTEND_SERVICE` | `"email-composer-frontend"` |
+| `BACKEND_URL` | `"https://email-composer-backend-147155498924.us-central1.run.app"` |
 
 #### Docker Configuration
 
@@ -1948,5 +1948,5 @@ All functions support both SQLite and PostgreSQL via conditional logic on `_is_l
 #### Cloud Build (`cloudbuild.yaml`):
 - Builder: `gcr.io/cloud-builders/docker`
 - Build arg: `REACT_APP_API_BASE=${_BACKEND_URL}`
-- Substitution default: `_BACKEND_URL: https://resolve-backend-147155498924.us-central1.run.app`
-- Output image: `us-central1-docker.pkg.dev/resolve-490813/resolve-repo/resolve-frontend:v1`
+- Substitution default: `_BACKEND_URL: https://email-composer-backend-147155498924.us-central1.run.app`
+- Output image: `us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo/email-composer-frontend:v1`
