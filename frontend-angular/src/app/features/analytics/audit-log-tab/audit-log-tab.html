@@ -1,0 +1,84 @@
+<div class="audit-log">
+  <div class="audit-log__toolbar">
+    <select
+      class="audit-log__filter"
+      [ngModel]="filter()"
+      (ngModelChange)="onFilterChange($event)"
+    >
+      <option value="">All Events</option>
+      @for (t of eventTypes; track t) {
+        <option [value]="t">{{ humanize(t) }}</option>
+      }
+    </select>
+    <span class="audit-log__count">{{ total() }} events</span>
+  </div>
+
+  <div class="audit-log__table">
+    <div class="audit-log__header-row">
+      <span class="audit-log__col audit-log__col--time">Time</span>
+      <span class="audit-log__col audit-log__col--event">Event</span>
+      <span class="audit-log__col audit-log__col--user">User</span>
+      <span class="audit-log__col audit-log__col--ip">IP</span>
+      <span class="audit-log__col audit-log__col--resource">Resource</span>
+    </div>
+
+    @for (ev of events(); track ev.id) {
+      <div class="audit-log__row-wrapper">
+        <div
+          class="audit-log__row"
+          [class.audit-log__row--expanded]="expandedId() === ev.id"
+          (click)="toggleExpanded(ev.id)"
+        >
+          <span class="audit-log__col audit-log__col--time">
+            {{ formatTime(ev.timestamp) }}
+          </span>
+          <span class="audit-log__col audit-log__col--event">
+            <span
+              [class]="'audit-log__badge audit-log__badge--' + badgeFor(ev.event_type)"
+            >
+              {{ humanize(ev.event_type) }}
+            </span>
+          </span>
+          <span class="audit-log__col audit-log__col--user">
+            {{ ev.user_email || '—' }}
+          </span>
+          <span class="audit-log__col audit-log__col--ip">
+            {{ ev.ip_address || '—' }}
+          </span>
+          <span class="audit-log__col audit-log__col--resource">
+            {{ ev.resource_type || '—' }}
+          </span>
+        </div>
+        @if (expandedId() === ev.id && ev.metadata_json) {
+          <div class="audit-log__details">
+            <pre class="audit-log__json">{{ prettyJson(ev.metadata_json) }}</pre>
+          </div>
+        }
+      </div>
+    }
+
+    @if (events().length === 0) {
+      <div class="audit-log__empty">No events found</div>
+    }
+  </div>
+
+  <div class="audit-log__pagination">
+    <button
+      type="button"
+      class="audit-log__page-btn"
+      [disabled]="page() <= 1"
+      (click)="prevPage()"
+    >
+      Prev
+    </button>
+    <span class="audit-log__page-info">{{ page() }} / {{ totalPages() }}</span>
+    <button
+      type="button"
+      class="audit-log__page-btn"
+      [disabled]="page() >= totalPages()"
+      (click)="nextPage()"
+    >
+      Next
+    </button>
+  </div>
+</div>

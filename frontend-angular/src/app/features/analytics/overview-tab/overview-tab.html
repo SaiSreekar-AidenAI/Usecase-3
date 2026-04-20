@@ -1,0 +1,39 @@
+<div class="overview-tab">
+  <div class="overview-tab__cards">
+    <app-stat-card label="Active Users (24h)" [value]="stats()?.active_users_24h ?? 0" />
+    <app-stat-card label="Active Sessions" [value]="stats()?.active_sessions ?? 0" />
+    <app-stat-card label="Queries Today" [value]="stats()?.queries_today ?? 0" />
+    <app-stat-card label="Tokens Today" [value]="stats()?.tokens_today ?? 0" format="compact" />
+  </div>
+
+  <div class="overview-tab__chart-card">
+    <h3 class="overview-tab__chart-title">Activity (Last 30 Days)</h3>
+    <div class="overview-tab__chart">
+      <ngx-charts-area-chart
+        [results]="chartData()"
+        [scheme]="colorScheme()"
+        [gradient]="true"
+        [xAxis]="true"
+        [yAxis]="true"
+        [showXAxisLabel]="false"
+        [showYAxisLabel]="false"
+        [autoScale]="true"
+        [curve]="curve"
+      ></ngx-charts-area-chart>
+    </div>
+  </div>
+
+  <div class="overview-tab__stats-row">
+    <app-stat-card label="Total Users" [value]="stats()?.total_users ?? 0" />
+    <app-stat-card
+      label="Total Queries"
+      [value]="stats()?.total_queries ?? 0"
+      format="compact"
+    />
+    <app-stat-card
+      label="Total Tokens"
+      [value]="stats()?.total_tokens ?? 0"
+      format="compact"
+    />
+  </div>
+</div>

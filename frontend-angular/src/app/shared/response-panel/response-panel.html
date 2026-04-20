@@ -1,0 +1,93 @@
+<div class="response-panel">
+  <div class="response-panel__header">
+    <div class="response-panel__tabs">
+      <button
+        type="button"
+        class="response-panel__tab"
+        [class.response-panel__tab--active]="activeTab() === 'response'"
+        (click)="activeTab.set('response')"
+      >
+        Response
+      </button>
+      <button
+        type="button"
+        class="response-panel__tab"
+        [class.response-panel__tab--active]="activeTab() === 'reasoning'"
+        (click)="activeTab.set('reasoning')"
+      >
+        Reasoning
+      </button>
+      <button
+        type="button"
+        class="response-panel__tab"
+        [class.response-panel__tab--active]="activeTab() === 'sources'"
+        (click)="activeTab.set('sources')"
+      >
+        Sources@if (state.sources().length > 0) { ({{ state.sources().length }}) }
+      </button>
+    </div>
+
+    @if (activeTab() === 'response') {
+      <div class="response-panel__actions">
+        @if (isEdited()) {
+          <app-button
+            variant="primary"
+            [disabled]="saving()"
+            (click)="onSave()"
+          >
+            {{ saved() ? 'Saved!' : saving() ? 'Saving...' : 'Save' }}
+          </app-button>
+        }
+        <app-button variant="success" (click)="onCopy()">
+          {{ copied() ? 'Copied!' : 'Copy' }}
+        </app-button>
+      </div>
+    }
+  </div>
+
+  @switch (activeTab()) {
+    @case ('response') {
+      <textarea
+        #textarea
+        class="response-panel__textarea"
+        spellcheck="false"
+        [value]="state.editedResponse()"
+        (input)="onInput($event)"
+      ></textarea>
+      <p class="response-panel__hint">
+        {{
+          isEdited()
+            ? 'You have unsaved edits — click Save to update'
+            : 'Edit the response above before copying'
+        }}
+      </p>
+    }
+
+    @case ('reasoning') {
+      <div class="response-panel__reasoning">
+        {{ state.reasoning() ?? 'No reasoning available for this response.' }}
+      </div>
+    }
+
+    @case ('sources') {
+      <div class="response-panel__sources">
+        @if (state.sources().length === 0) {
+          <p class="response-panel__sources-empty">No sources retrieved.</p>
+        } @else {
+          @for (src of state.sources(); track $index) {
+            <div class="response-panel__source-card">
+              <div class="response-panel__source-header">
+                <span class="response-panel__source-badge">{{ src.category }}</span>
+                <span class="response-panel__source-score">
+                  {{ (src.relevance_score * 100).toFixed(0) }}% match
+                </span>
+              </div>
+              <p class="response-panel__source-desc">{{ src.description }}</p>
+              <p class="response-panel__source-response">{{ src.response }}</p>
+            </div>
+          }
+        }
+      </div>
+    }
+  }
+</div>

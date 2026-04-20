@@ -10,21 +10,12 @@ import { AuthService } from './core/services/auth.service';
 import { ThemeService } from './core/services/theme.service';
 import { IntroService } from './core/services/intro.service';
 import { HeartbeatService } from './core/services/heartbeat.service';
-import { PageTransitionComponent } from './shared/page-transition/page-transition.component';
+import { PageTransition } from './shared/page-transition/page-transition';
 
-/**
- * Root shell.
- *
- * - ThemeService is injected so it constructs early (constructor reads
- *   localStorage and applies the data-theme attribute).
- * - When auth flips to 'authenticated', start the intro animation timeline
- *   and the heartbeat tracker. When it flips to 'unauthenticated', tear them
- *   down. This mirrors React's <AuthGate>/useHeartbeat behaviour.
- */
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, PageTransitionComponent],
+  imports: [RouterOutlet, PageTransition],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <router-outlet />

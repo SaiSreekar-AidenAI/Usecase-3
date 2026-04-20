@@ -1,0 +1,31 @@
+<div class="analytics">
+      <div class="analytics__header">
+        <div>
+          <h2 class="analytics__title">Analytics</h2>
+          <p class="analytics__subtitle">
+            Audit trails, sessions, and usage metrics
+          </p>
+        </div>
+      </div>
+
+      <div class="analytics__tabs" role="tablist">
+        @for (tab of tabs; track tab.path) {
+          <a
+            class="analytics__tab"
+            routerLinkActive="analytics__tab--active"
+            #rla="routerLinkActive"
+            [routerLink]="['/analytics', tab.path]"
+            role="tab"
+          >
+            {{ tab.label }}
+            @if (rla.isActive) {
+              <span class="analytics__tab-indicator"></span>
+            }
+          </a>
+        }
+      </div>
+
+      <div class="analytics__content">
+        <router-outlet />
+      </div>
+</div>

@@ -1,0 +1,55 @@
+<div class="loader" role="status" aria-label="Generating response">
+  <div class="loader__ambient"></div>
+
+  <div class="loader__orb-system">
+    <div class="loader__ring loader__ring--outer"></div>
+    <div class="loader__ring loader__ring--inner"></div>
+
+    @for (i of orbIndices; track i) {
+      <div
+        class="loader__orb-wrapper"
+        [style.animation-duration.s]="4 + i * 0.8"
+        [style.animation-delay.s]="i * 0.3"
+      >
+        <div
+          class="loader__orb"
+          [style.width.px]="4 + (i % 3) * 2"
+          [style.height.px]="4 + (i % 3) * 2"
+          [style.animation-duration.s]="2 + i * 0.4"
+          [style.animation-delay.s]="i * 0.2"
+        ></div>
+      </div>
+    }
+
+    <div class="loader__center"></div>
+
+    @for (p of particles; track p.index) {
+      <div
+        class="loader__particle"
+        [style.--p-x1.px]="p.x1"
+        [style.--p-y1.px]="p.y1"
+        [style.--p-x2.px]="p.x2"
+        [style.--p-y2.px]="p.y2"
+        [style.--p-x3.px]="p.x3"
+        [style.--p-y3.px]="p.y3"
+        [style.animation-duration.s]="p.duration"
+        [style.animation-delay.s]="p.delay"
+      ></div>
+    }
+  </div>
+
+  <div class="loader__status">
+    <span class="loader__word" [attr.data-key]="wordIndex()">
+      {{ words[wordIndex()] }}
+    </span>
+    <span class="loader__dots">
+      <span class="loader__dot-char loader__dot-char--1">.</span>
+      <span class="loader__dot-char loader__dot-char--2">.</span>
+      <span class="loader__dot-char loader__dot-char--3">.</span>
+    </span>
+  </div>
+
+  <div class="loader__progress">
+    <div class="loader__progress-fill"></div>
+  </div>
+</div>

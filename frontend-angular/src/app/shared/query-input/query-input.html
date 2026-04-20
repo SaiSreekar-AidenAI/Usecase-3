@@ -1,0 +1,12 @@
+<div class="query-input">
+  <label class="query-input__label" for="query-textarea">Customer Query</label>
+  <textarea
+    id="query-textarea"
+    class="query-input__textarea"
+    placeholder="Paste the customer's query here..."
+    rows="4"
+    spellcheck="false"
+    [value]="state.query()"
+    (input)="onInput($event)"
+  ></textarea>
+</div>

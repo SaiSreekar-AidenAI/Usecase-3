@@ -1,0 +1,14 @@
+<button
+  type="button"
+  class="toggle"
+  role="switch"
+  [attr.aria-checked]="checked()"
+  (click)="toggle()"
+>
+  <span class="toggle__track" [class.toggle__track--active]="checked()">
+    <span class="toggle__thumb"></span>
+  </span>
+  <span class="toggle__label" [class.toggle__label--active]="checked()">
+    {{ label() }}
+  </span>
+</button>

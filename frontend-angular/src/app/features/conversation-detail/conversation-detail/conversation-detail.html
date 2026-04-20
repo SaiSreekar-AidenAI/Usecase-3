@@ -1,0 +1,135 @@
+@if (conversation(); as conv) {
+  <div class="conv-detail" [class.conv-detail--ready]="intro.contentReady()">
+    <!-- Top actions -->
+    <div class="conv-detail__topbar conv-detail__stagger-1">
+      <app-button variant="ghost" (click)="onNewQuery()">
+        ← New Query
+      </app-button>
+      <span class="conv-detail__timestamp">{{ formatTime(conv.timestamp) }}</span>
+    </div>
+
+    <!-- Query bubble -->
+    <div class="conv-detail__stagger-2">
+      <app-card variant="conv-detail__query-card">
+        <div class="conv-detail__card-label">
+          <span class="conv-detail__label-dot conv-detail__label-dot--query"></span>
+          <span>Customer Query</span>
+        </div>
+        <p class="conv-detail__query-text">{{ conv.query }}</p>
+        @if (conv.customPrompt) {
+          <div class="conv-detail__prompt-used">
+            <span class="conv-detail__prompt-tag">Custom Prompt</span>
+            <span class="conv-detail__prompt-text">{{ conv.customPrompt }}</span>
+          </div>
+        }
+      </app-card>
+    </div>
+
+    <!-- Connector line -->
+    <div class="conv-detail__connector conv-detail__stagger-3">
+      <div class="conv-detail__connector-line"></div>
+      <span class="conv-detail__connector-label">AI Generated</span>
+      <div class="conv-detail__connector-line"></div>
+    </div>
+
+    <!-- Response card -->
+    <div class="conv-detail__stagger-4">
+      <app-card variant="conv-detail__response-card">
+        <div class="conv-detail__response-header">
+          <div class="conv-detail__tabs">
+            <button
+              type="button"
+              class="conv-detail__tab"
+              [class.conv-detail__tab--active]="activeTab() === 'response'"
+              (click)="activeTab.set('response')"
+            >
+              Response
+            </button>
+            <button
+              type="button"
+              class="conv-detail__tab"
+              [class.conv-detail__tab--active]="activeTab() === 'reasoning'"
+              (click)="activeTab.set('reasoning')"
+            >
+              Reasoning
+            </button>
+            <button
+              type="button"
+              class="conv-detail__tab"
+              [class.conv-detail__tab--active]="activeTab() === 'sources'"
+              (click)="activeTab.set('sources')"
+            >
+              Sources@if (sourcesCount() > 0) { ({{ sourcesCount() }}) }
+            </button>
+          </div>
+          <div class="conv-detail__response-actions">
+            @if (activeTab() === 'response' && isEdited()) {
+              <app-button
+                variant="primary"
+                [disabled]="saving()"
+                (click)="onSave(conv.id)"
+              >
+                {{ saved() ? 'Saved!' : saving() ? 'Saving...' : 'Save' }}
+              </app-button>
+            }
+            <app-button variant="success" (click)="onCopy()">
+              {{ copied() ? 'Copied!' : 'Copy' }}
+            </app-button>
+            <app-button variant="danger" (click)="onDelete(conv.id)">
+              Delete
+            </app-button>
+          </div>
+        </div>
+
+        @switch (activeTab()) {
+          @case ('response') {
+            <textarea
+              #textarea
+              class="conv-detail__response-textarea"
+              spellcheck="false"
+              [value]="editedText()"
+              (input)="onInput($event)"
+            ></textarea>
+            <p class="conv-detail__edit-hint">
+              {{
+                isEdited()
+                  ? 'You have unsaved edits — click Save to update'
+                  : 'Edit the response above before copying'
+              }}
+            </p>
+          }
+          @case ('reasoning') {
+            <div class="conv-detail__reasoning-body">
+              {{ conv.reasoning || 'No reasoning available for this response.' }}
+            </div>
+          }
+          @case ('sources') {
+            <div class="conv-detail__sources-body">
+              @if (sourcesCount() === 0) {
+                <p class="conv-detail__sources-empty">No sources retrieved.</p>
+              } @else {
+                @for (src of conv.sources; track $index) {
+                  <div class="conv-detail__source-card">
+                    <div class="conv-detail__source-header">
+                      <span class="conv-detail__source-badge">{{ src.category }}</span>
+                      <span class="conv-detail__source-score">
+                        {{ (src.relevance_score * 100).toFixed(0) }}% match
+                      </span>
+                    </div>
+                    <p class="conv-detail__source-desc">{{ src.description }}</p>
+                    <p class="conv-detail__source-response">{{ src.response }}</p>
+                  </div>
+                }
+              }
+            </div>
+          }
+        }
+      </app-card>
+    </div>
+  </div>
+} @else {
+  <div class="conv-detail conv-detail--missing">
+    <p class="conv-detail__missing-text">Conversation not found.</p>
+    <app-button variant="ghost" (click)="onNewQuery()">← New Query</app-button>
+  </div>
+}

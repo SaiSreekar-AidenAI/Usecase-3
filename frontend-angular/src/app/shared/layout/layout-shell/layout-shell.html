@@ -1,0 +1,165 @@
+<div
+  class="app-shell"
+  [class.intro-sidebar]="intro.sidebarReady()"
+  [class.intro-atmosphere]="intro.atmosphereReady()"
+  [class.intro-topbar]="intro.topbarReady()"
+  [class.intro-content]="intro.contentReady()"
+>
+  <aside
+    class="sidebar"
+    [class.sidebar--open]="sidebarOpen()"
+    [class.sidebar--collapsed]="sidebarCollapsed()"
+  >
+    <div class="sidebar__header">
+      <div class="sidebar__brand">
+        <div class="sidebar__logo">
+          <svg
+            class="sidebar__logo-mark"
+            viewBox="0 0 32 32"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="4" y="8" width="24" height="17" rx="2.5" />
+            <path d="M4 11 L16 19 L28 11" />
+            <path d="M22 5 L23.2 7.3 L25.5 8.5 L23.2 9.7 L22 12 L20.8 9.7 L18.5 8.5 L20.8 7.3 Z" fill="currentColor" stroke="none" />
+          </svg>
+          <div class="sidebar__logo-burst"></div>
+        </div>
+        <div class="sidebar__brand-text">
+          <h1 class="sidebar__title">Email Composer</h1>
+          <p class="sidebar__subtitle">AI Support Console</p>
+        </div>
+      </div>
+      <div class="sidebar__accent-bar"></div>
+    </div>
+
+    <div class="sidebar__content">
+      <app-history-sidebar />
+    </div>
+
+    <div class="sidebar__user-section">
+      @if (auth.user(); as u) {
+        <div class="sidebar__user-info">
+          <span class="sidebar__user-name">{{ u.name }}</span>
+          <span
+            class="sidebar__user-role"
+            [class.sidebar__user-role--admin]="u.role === 'admin'"
+            [class.sidebar__user-role--associate]="u.role === 'associate'"
+          >
+            {{ u.role }}
+          </span>
+        </div>
+      }
+      <div class="sidebar__user-actions">
+        @if (auth.isAdmin()) {
+          <button type="button" class="sidebar__nav-btn" (click)="goAnalytics()">
+            Analytics
+          </button>
+          <button type="button" class="sidebar__nav-btn" (click)="goUsers()">
+            Users
+          </button>
+        }
+        <button
+          type="button"
+          class="sidebar__nav-btn sidebar__nav-btn--logout"
+          (click)="onLogout()"
+        >
+          Logout
+        </button>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="sidebar__collapse-toggle"
+      [attr.aria-label]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      [attr.aria-expanded]="!sidebarCollapsed()"
+      [attr.title]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      (click)="toggleCollapse()"
+    >
+      <svg
+        class="sidebar__collapse-toggle-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M9 4v16" />
+        <path d="m15 10-2 2 2 2" />
+      </svg>
+      <span class="sidebar__collapse-toggle-label">Collapse</span>
+    </button>
+
+    <div class="sidebar__footer">
+      <div class="sidebar__status">
+        <span class="sidebar__status-dot"></span>
+        <span class="sidebar__status-label">Online</span>
+      </div>
+      <span class="sidebar__version">v0.1.0</span>
+    </div>
+  </aside>
+
+  @if (sidebarOpen()) {
+    <div class="app-shell__overlay" (click)="closeSidebar()"></div>
+  }
+
+  <main class="main">
+    <div class="main__cursor-glow"></div>
+    <div class="main__orb main__orb--1"></div>
+    <div class="main__orb main__orb--2"></div>
+    <div class="main__orb main__orb--3"></div>
+    <div class="main__glow"></div>
+    <div class="main__mesh"></div>
+    <div class="main__noise"></div>
+    <div class="main__grid"></div>
+
+    <div class="main__topbar">
+      <button
+        type="button"
+        class="main__menu-btn"
+        aria-label="Toggle sidebar"
+        (click)="toggleSidebar()"
+      >
+        {{ sidebarOpen() ? '✕' : '☰' }}
+      </button>
+      <span class="main__mobile-title">Email Composer</span>
+
+      <div class="main__ticker" aria-hidden="true">
+        <div class="main__ticker-track">
+          @for (item of tickerItems(); track $index) {
+            <span class="main__ticker-item">
+              <span class="main__ticker-dot"></span>
+              {{ item }}
+            </span>
+          }
+          @for (item of tickerItems(); track $index) {
+            <span class="main__ticker-item">
+              <span class="main__ticker-dot"></span>
+              {{ item }}
+            </span>
+          }
+        </div>
+      </div>
+
+      <div class="main__topbar-right">
+        <app-theme-switcher />
+      </div>
+    </div>
+
+    <div class="main__scroll">
+      <div class="main__content">
+        <router-outlet />
+      </div>
+    </div>
+  </main>
+</div>

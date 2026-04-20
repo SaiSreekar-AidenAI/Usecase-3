@@ -1,0 +1,56 @@
+<div class="history-sidebar" [class.history-sidebar--ready]="intro.contentReady()">
+  <button
+    type="button"
+    class="history-sidebar__new-btn"
+    [class.history-sidebar__new-btn--active]="isOnGenerate()"
+    (click)="onNewQuery()"
+  >
+    <span class="history-sidebar__new-icon">+</span>
+    <span>New Query</span>
+  </button>
+
+  @if (state.history().length > 0) {
+    <div class="history-sidebar__header">
+      <span class="history-sidebar__count">History ({{ state.history().length }})</span>
+      <button type="button" class="history-sidebar__clear" (click)="onClearAll()">
+        Clear
+      </button>
+    </div>
+  }
+
+  @if (state.history().length === 0) {
+    <div class="history-sidebar__empty">
+      <span class="history-sidebar__empty-icon">
+        <svg
+          width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5"
+          stroke-linecap="round" stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+      </span>
+      <p>No history yet</p>
+    </div>
+  } @else {
+    <div class="history-sidebar__list">
+      @for (conv of state.history(); track conv.id; let i = $index) {
+        <button
+          type="button"
+          class="history-sidebar__item"
+          [class.history-sidebar__item--active]="state.selectedConversationId() === conv.id"
+          [style.--stagger-delay]="i * 0.03 + 's'"
+          (click)="onSelect(conv.id)"
+        >
+          <span class="history-sidebar__item-query">{{ conv.query }}</span>
+          <div class="history-sidebar__item-meta">
+            <span class="history-sidebar__item-time">{{ timeAgo(conv.timestamp) }}</span>
+            @if (conv.customPrompt) {
+              <span class="history-sidebar__item-badge">P</span>
+            }
+          </div>
+        </button>
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,29 @@
+<div class="action-bar">
+  <div class="action-bar__left">
+    @if (!hasResponse()) {
+      <app-button
+        variant="primary"
+        [disabled]="!canGenerate()"
+        (click)="onGenerate()"
+      >
+        Generate Response
+      </app-button>
+    } @else {
+      <app-button
+        variant="danger"
+        [disabled]="!canGenerate()"
+        (click)="onGenerate()"
+      >
+        Regenerate
+      </app-button>
+      <app-button variant="ghost" (click)="onClear()">Clear</app-button>
+    }
+  </div>
+  <div class="action-bar__right">
+    <app-toggle
+      [checked]="state.promptModeEnabled()"
+      label="Prompt Mode"
+      (checkedChange)="onTogglePromptMode()"
+    />
+  </div>
+</div>

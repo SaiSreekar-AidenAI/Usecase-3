@@ -1,0 +1,12 @@
+<div class="prompt-input">
+  <label class="prompt-input__label" for="prompt-textarea">Custom Prompt</label>
+  <textarea
+    id="prompt-textarea"
+    class="prompt-input__textarea"
+    placeholder="Add specific instructions for the AI..."
+    rows="2"
+    spellcheck="false"
+    [value]="state.customPrompt()"
+    (input)="onInput($event)"
+  ></textarea>
+</div>

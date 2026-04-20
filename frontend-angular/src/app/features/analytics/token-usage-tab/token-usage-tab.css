@@ -1,0 +1,287 @@
+.token-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.token-tab__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-md);
+}
+
+.token-tab__charts-row {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-md);
+}
+
+/* ── Glass chart card ── */
+.token-tab__chart-card {
+  padding: var(--space-lg);
+  background: var(--color-glass);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  background-image: var(--gradient-card);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow var(--transition-normal), border-color var(--transition-normal);
+}
+
+.token-tab__chart-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(160deg,
+    rgba(255,255,255,0.07) 0%,
+    transparent 50%);
+  pointer-events: none;
+}
+
+.token-tab__chart-card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-card-glow),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.token-tab__chart-title {
+  font: var(--text-heading);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-md);
+  position: relative;
+}
+
+.token-tab__chart-stack {
+  position: relative;
+  width: 100%;
+  height: 300px;
+}
+
+.token-tab__chart-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.token-tab__chart-layer--overlay {
+  pointer-events: none;
+}
+
+.token-tab__chart-layer ngx-charts-bar-vertical,
+.token-tab__chart-layer ngx-charts-line-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.token-tab__pie {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  min-width: 0;
+}
+
+.token-tab__pie ngx-charts-pie-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.token-tab__pie .chart-legend,
+.token-tab__pie .pie-label {
+  display: none !important;
+}
+
+.token-tab__pie-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  text-align: center;
+}
+
+.token-tab__pie-center-value {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-tab__pie-center-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.token-tab__pie-totals {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-md) var(--space-xs) 0;
+  border-top: 1px solid var(--color-border-faint);
+  margin-top: var(--space-md);
+}
+
+.token-tab__pie-total {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.token-tab__pie-total-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.token-tab__pie-total-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.token-tab__pie-total-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  line-height: 1;
+}
+
+.token-tab__pie-total-value {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-tab__chart-card .ngx-charts text {
+  fill: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.token-tab__chart-card .ngx-charts .gridline-path {
+  stroke: var(--color-border-faint);
+}
+
+.token-tab__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.token-tab__empty {
+  font: var(--text-body);
+  color: var(--color-text-disabled);
+  text-align: center;
+  padding: var(--space-xl);
+}
+
+/* ── Glass table ── */
+.token-tab__table {
+  background: var(--color-glass);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  background-image: var(--gradient-card);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.token-tab__header-row {
+  display: grid;
+  grid-template-columns: 1fr 200px 100px 120px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-glass-strong);
+  border-bottom: 1px solid var(--color-glass-border);
+}
+
+.token-tab__header-row span {
+  font: var(--text-label);
+  color: var(--color-text-tertiary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.token-tab__row {
+  display: grid;
+  grid-template-columns: 1fr 200px 100px 120px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border-faint);
+  transition: background var(--transition-fast);
+}
+
+.token-tab__row:hover {
+  background: var(--color-glass-hover);
+}
+
+.token-tab__cell {
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.token-tab__bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.token-tab__bar {
+  height: 6px;
+  background: var(--gradient-gold);
+  border-radius: var(--radius-full);
+  min-width: 4px;
+  transition: width 0.4s ease;
+  box-shadow: var(--shadow-glow-sm);
+}
+
+.token-tab__bar-label {
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .token-tab__charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  .token-tab__header-row,
+  .token-tab__row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
