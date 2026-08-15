@@ -1,12 +1,111 @@
 import json
+import logging
+import re
 import time
 import uuid
-
-import asyncpg
+from pathlib import Path
+from typing import Any
 
 from .config import get_settings
 
-_pool: asyncpg.Pool | None = None
+logger = logging.getLogger(__name__)
+
+# ── Backend abstraction ────────────────────────────────────────
+
+_db: "_Backend | None" = None
+
+
+def _is_sqlite() -> bool:
+    return isinstance(_db, _SqliteBackend)
+
+
+class _Backend:
+    async def execute(self, sql: str, *args: Any) -> str: ...
+    async def executemany(self, sql: str, args_list: list[tuple]) -> None: ...
+    async def fetch(self, sql: str, *args: Any) -> list[dict]: ...
+    async def fetchrow(self, sql: str, *args: Any) -> dict | None: ...
+    async def fetchval(self, sql: str, *args: Any) -> Any: ...
+    async def close(self) -> None: ...
+
+
+class _PgBackend(_Backend):
+    def __init__(self, pool):
+        self._pool = pool
+
+    async def execute(self, sql, *args):
+        async with self._pool.acquire() as conn:
+            return await conn.execute(sql, *args)
+
+    async def executemany(self, sql, args_list):
+        async with self._pool.acquire() as conn:
+            await conn.executemany(sql, args_list)
+
+    async def fetch(self, sql, *args):
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql, *args)
+            return [dict(r) for r in rows]
+
+    async def fetchrow(self, sql, *args):
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(sql, *args)
+            return dict(row) if row else None
+
+    async def fetchval(self, sql, *args):
+        async with self._pool.acquire() as conn:
+            return await conn.fetchval(sql, *args)
+
+    async def close(self):
+        await self._pool.close()
+
+
+_PG_PLACEHOLDER = re.compile(r"\$(\d+)")
+
+
+class _SqliteBackend(_Backend):
+    def __init__(self, conn):
+        self._conn = conn
+
+    @staticmethod
+    def _q(sql: str) -> str:
+        """Convert $N placeholders to ?."""
+        return _PG_PLACEHOLDER.sub("?", sql)
+
+    async def execute(self, sql, *args):
+        cursor = await self._conn.execute(self._q(sql), args)
+        await self._conn.commit()
+        rc = cursor.rowcount if cursor.rowcount >= 0 else 0
+        return f"DONE {rc}"
+
+    async def executemany(self, sql, args_list):
+        await self._conn.executemany(self._q(sql), args_list)
+        await self._conn.commit()
+
+    async def fetch(self, sql, *args):
+        cursor = await self._conn.execute(self._q(sql), args)
+        rows = await cursor.fetchall()
+        if not rows:
+            return []
+        cols = [d[0] for d in cursor.description]
+        return [dict(zip(cols, row)) for row in rows]
+
+    async def fetchrow(self, sql, *args):
+        cursor = await self._conn.execute(self._q(sql), args)
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        cols = [d[0] for d in cursor.description]
+        return dict(zip(cols, row))
+
+    async def fetchval(self, sql, *args):
+        cursor = await self._conn.execute(self._q(sql), args)
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+    async def close(self):
+        await self._conn.close()
+
+
+# ── DDL ────────────────────────────────────────────────────────
 
 _CREATE_CONVERSATIONS = """
     CREATE TABLE IF NOT EXISTS conversations (
@@ -142,33 +241,61 @@ _CREATE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_query_cache_active ON query_cache(is_active)",
 ]
 
+_ADD_USER_ID_PG = "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT"
+
+# SQLite < 3.35 doesn't support IF NOT EXISTS on ALTER TABLE; catch the error
+_ADD_USER_ID_SQLITE = "ALTER TABLE conversations ADD COLUMN user_id TEXT"
+
+
+# ── Init / Close ───────────────────────────────────────────────
 
 async def init_db() -> None:
-    global _pool
+    global _db
     settings = get_settings()
-    if not settings.database_url:
-        raise RuntimeError("DATABASE_URL is required (Cloud SQL asyncpg DSN)")
 
-    _pool = await asyncpg.create_pool(dsn=settings.database_url)
-    async with _pool.acquire() as conn:
-        for ddl in [_CREATE_CONVERSATIONS, _CREATE_USERS, _CREATE_SESSIONS,
-                    _CREATE_AUDIT_EVENTS, _CREATE_LOGIN_ATTEMPTS,
-                    _CREATE_SESSION_ACTIVITY, _CREATE_TOKEN_USAGE,
-                    _CREATE_QUERY_CACHE]:
-            await conn.execute(ddl)
-        await conn.execute(
-            "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT"
-        )
-        for idx in _CREATE_INDEXES:
-            await conn.execute(idx)
+    if settings.database_url:
+        import asyncpg
+        logger.info("Using PostgreSQL (asyncpg) backend")
+        pool = await asyncpg.create_pool(dsn=settings.database_url)
+        _db = _PgBackend(pool)
+    else:
+        import aiosqlite
+        db_path = str(Path(__file__).resolve().parent.parent / "local.db")
+        logger.info("DATABASE_URL not set -- using SQLite at %s", db_path)
+        conn = await aiosqlite.connect(db_path)
+        await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.execute("PRAGMA foreign_keys=ON")
+        _db = _SqliteBackend(conn)
+
+    for ddl in [
+        _CREATE_CONVERSATIONS, _CREATE_USERS, _CREATE_SESSIONS,
+        _CREATE_AUDIT_EVENTS, _CREATE_LOGIN_ATTEMPTS,
+        _CREATE_SESSION_ACTIVITY, _CREATE_TOKEN_USAGE,
+        _CREATE_QUERY_CACHE,
+    ]:
+        await _db.execute(ddl)
+
+    # Add user_id column if missing (migration)
+    if _is_sqlite():
+        try:
+            await _db.execute(_ADD_USER_ID_SQLITE)
+        except Exception:
+            pass  # column already exists
+    else:
+        await _db.execute(_ADD_USER_ID_PG)
+
+    for idx in _CREATE_INDEXES:
+        await _db.execute(idx)
 
 
 async def close_db() -> None:
-    global _pool
-    if _pool:
-        await _pool.close()
-        _pool = None
+    global _db
+    if _db:
+        await _db.close()
+        _db = None
 
+
+# ── Conversations ──────────────────────────────────────────────
 
 async def save_conversation(
     query: str,
@@ -182,12 +309,11 @@ async def save_conversation(
     ts = int(time.time() * 1000)
     sources_json = json.dumps(sources)
 
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO conversations (id, user_id, query, response, reasoning, sources_json, custom_prompt, timestamp)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
-            conv_id, user_id, query, response, reasoning, sources_json, custom_prompt, ts,
-        )
+    await _db.execute(
+        """INSERT INTO conversations (id, user_id, query, response, reasoning, sources_json, custom_prompt, timestamp)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+        conv_id, user_id, query, response, reasoning, sources_json, custom_prompt, ts,
+    )
 
     return {
         "id": conv_id,
@@ -201,11 +327,10 @@ async def save_conversation(
 
 
 async def get_all_conversations(user_id: str) -> list[dict]:
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM conversations WHERE user_id = $1 ORDER BY timestamp DESC",
-            user_id,
-        )
+    rows = await _db.fetch(
+        "SELECT * FROM conversations WHERE user_id = $1 ORDER BY timestamp DESC",
+        user_id,
+    )
 
     results = []
     for row in rows:
@@ -222,28 +347,25 @@ async def get_all_conversations(user_id: str) -> list[dict]:
 
 
 async def update_conversation_response(conv_id: str, response: str, user_id: str) -> bool:
-    async with _pool.acquire() as conn:
-        status = await conn.execute(
-            "UPDATE conversations SET response = $1 WHERE id = $2 AND user_id = $3",
-            response, conv_id, user_id,
-        )
-        return int(status.split()[-1]) > 0
+    status = await _db.execute(
+        "UPDATE conversations SET response = $1 WHERE id = $2 AND user_id = $3",
+        response, conv_id, user_id,
+    )
+    return int(status.split()[-1]) > 0
 
 
 async def delete_conversation(conv_id: str, user_id: str) -> bool:
-    async with _pool.acquire() as conn:
-        status = await conn.execute(
-            "DELETE FROM conversations WHERE id = $1 AND user_id = $2", conv_id, user_id
-        )
-        return int(status.split()[-1]) > 0
+    status = await _db.execute(
+        "DELETE FROM conversations WHERE id = $1 AND user_id = $2", conv_id, user_id
+    )
+    return int(status.split()[-1]) > 0
 
 
 async def delete_all_conversations(user_id: str) -> int:
-    async with _pool.acquire() as conn:
-        status = await conn.execute(
-            "DELETE FROM conversations WHERE user_id = $1", user_id
-        )
-        return int(status.split()[-1])
+    status = await _db.execute(
+        "DELETE FROM conversations WHERE user_id = $1", user_id
+    )
+    return int(status.split()[-1])
 
 
 # ── User CRUD ────────────────────────────────────────────────
@@ -265,12 +387,11 @@ async def create_user(
     user_id: str, email: str, name: str, role: str, password_hash: str | None
 ) -> dict:
     now = int(time.time() * 1000)
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO users (id, email, name, role, password_hash, is_active, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, 1, $6, $7)""",
-            user_id, email, name, role, password_hash, now, now,
-        )
+    await _db.execute(
+        """INSERT INTO users (id, email, name, role, password_hash, is_active, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 1, $6, $7)""",
+        user_id, email, name, role, password_hash, now, now,
+    )
     return {
         "id": user_id, "email": email, "name": name, "role": role,
         "password_hash": password_hash, "is_active": True,
@@ -279,26 +400,23 @@ async def create_user(
 
 
 async def get_user_by_email(email: str) -> dict | None:
-    async with _pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT * FROM users WHERE email = $1", email
-        )
+    row = await _db.fetchrow(
+        "SELECT * FROM users WHERE email = $1", email
+    )
     return _row_to_user(row) if row else None
 
 
 async def get_user_by_id(user_id: str) -> dict | None:
-    async with _pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1", user_id
-        )
+    row = await _db.fetchrow(
+        "SELECT * FROM users WHERE id = $1", user_id
+    )
     return _row_to_user(row) if row else None
 
 
 async def get_all_users() -> list[dict]:
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM users ORDER BY created_at DESC"
-        )
+    rows = await _db.fetch(
+        "SELECT * FROM users ORDER BY created_at DESC"
+    )
     return [_row_to_user(r) for r in rows]
 
 
@@ -319,21 +437,19 @@ async def update_user(
     new_active = (1 if is_active else 0) if is_active is not None else (1 if user["is_active"] else 0)
     now = int(time.time() * 1000)
 
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """UPDATE users SET name=$1, role=$2, password_hash=$3, is_active=$4, updated_at=$5
-               WHERE id=$6""",
-            new_name, new_role, new_hash, new_active, now, user_id,
-        )
+    await _db.execute(
+        """UPDATE users SET name=$1, role=$2, password_hash=$3, is_active=$4, updated_at=$5
+           WHERE id=$6""",
+        new_name, new_role, new_hash, new_active, now, user_id,
+    )
     return True
 
 
 async def delete_user(user_id: str) -> bool:
-    async with _pool.acquire() as conn:
-        status = await conn.execute(
-            "DELETE FROM users WHERE id = $1", user_id
-        )
-        return int(status.split()[-1]) > 0
+    status = await _db.execute(
+        "DELETE FROM users WHERE id = $1", user_id
+    )
+    return int(status.split()[-1]) > 0
 
 
 # ── Session CRUD ─────────────────────────────────────────────
@@ -341,12 +457,11 @@ async def delete_user(user_id: str) -> bool:
 async def create_session(
     session_id: str, user_id: str, token: str, created_at: int, expires_at: int
 ) -> dict:
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO sessions (id, user_id, token, created_at, expires_at)
-               VALUES ($1, $2, $3, $4, $5)""",
-            session_id, user_id, token, created_at, expires_at,
-        )
+    await _db.execute(
+        """INSERT INTO sessions (id, user_id, token, created_at, expires_at)
+           VALUES ($1, $2, $3, $4, $5)""",
+        session_id, user_id, token, created_at, expires_at,
+    )
     return {
         "id": session_id, "user_id": user_id, "token": token,
         "created_at": created_at, "expires_at": expires_at,
@@ -354,10 +469,9 @@ async def create_session(
 
 
 async def get_session_by_token(token: str) -> dict | None:
-    async with _pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT * FROM sessions WHERE token = $1", token
-        )
+    row = await _db.fetchrow(
+        "SELECT * FROM sessions WHERE token = $1", token
+    )
     if not row:
         return None
     return {
@@ -367,28 +481,25 @@ async def get_session_by_token(token: str) -> dict | None:
 
 
 async def delete_session(token: str) -> bool:
-    async with _pool.acquire() as conn:
-        status = await conn.execute(
-            "DELETE FROM sessions WHERE token = $1", token
-        )
-        return int(status.split()[-1]) > 0
+    status = await _db.execute(
+        "DELETE FROM sessions WHERE token = $1", token
+    )
+    return int(status.split()[-1]) > 0
 
 
 async def delete_user_sessions(user_id: str) -> int:
-    async with _pool.acquire() as conn:
-        status = await conn.execute(
-            "DELETE FROM sessions WHERE user_id = $1", user_id
-        )
-        return int(status.split()[-1])
+    status = await _db.execute(
+        "DELETE FROM sessions WHERE user_id = $1", user_id
+    )
+    return int(status.split()[-1])
 
 
 async def delete_expired_sessions() -> int:
     now = int(time.time() * 1000)
-    async with _pool.acquire() as conn:
-        status = await conn.execute(
-            "DELETE FROM sessions WHERE expires_at < $1", now
-        )
-        return int(status.split()[-1])
+    status = await _db.execute(
+        "DELETE FROM sessions WHERE expires_at < $1", now
+    )
+    return int(status.split()[-1])
 
 
 async def seed_admin_user(email: str, password: str, name: str) -> None:
@@ -406,20 +517,19 @@ async def seed_admin_user(email: str, password: str, name: str) -> None:
 async def save_audit_events_batch(events: list[dict]) -> None:
     if not events:
         return
-    async with _pool.acquire() as conn:
-        await conn.executemany(
-            """INSERT INTO audit_events
-               (id, event_type, user_id, user_email, user_role, ip_address, user_agent,
-                resource_id, resource_type, metadata_json, timestamp)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
-            [
-                (e["id"], e["event_type"], e.get("user_id"), e.get("user_email"),
-                 e.get("user_role"), e.get("ip_address"), e.get("user_agent"),
-                 e.get("resource_id"), e.get("resource_type"), e.get("metadata_json"),
-                 e["timestamp"])
-                for e in events
-            ],
-        )
+    await _db.executemany(
+        """INSERT INTO audit_events
+           (id, event_type, user_id, user_email, user_role, ip_address, user_agent,
+            resource_id, resource_type, metadata_json, timestamp)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+        [
+            (e["id"], e["event_type"], e.get("user_id"), e.get("user_email"),
+             e.get("user_role"), e.get("ip_address"), e.get("user_agent"),
+             e.get("resource_id"), e.get("resource_type"), e.get("metadata_json"),
+             e["timestamp"])
+            for e in events
+        ],
+    )
 
 
 async def get_audit_events(
@@ -455,13 +565,12 @@ async def get_audit_events(
     where = " WHERE " + " AND ".join(conditions) if conditions else ""
 
     count_sql = f"SELECT COUNT(*) as cnt FROM audit_events{where}"
-    offset = (page - 1) * limit
+    total = await _db.fetchval(count_sql, *params)
 
+    offset = (page - 1) * limit
     data_sql = f"SELECT * FROM audit_events{where} ORDER BY timestamp DESC LIMIT {ph()} OFFSET {ph()}"
     params.extend([limit, offset])
-    async with _pool.acquire() as conn:
-        total = await conn.fetchval(count_sql, *params[:-2])
-        rows = await conn.fetch(data_sql, *params)
+    rows = await _db.fetch(data_sql, *params)
 
     items = []
     for r in rows:
@@ -479,19 +588,18 @@ async def get_audit_events(
 # ── Login Attempts ──────────────────────────────────────────
 
 async def save_login_attempt(attempt: dict) -> None:
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO login_attempts
-               (id, user_id, user_email, success, ip_address, country, city,
-                browser, os, device_type, screen_resolution, timezone, session_id, failure_reason, timestamp)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)""",
-            attempt["id"], attempt.get("user_id"), attempt["user_email"],
-            1 if attempt["success"] else 0, attempt.get("ip_address"),
-            attempt.get("country"), attempt.get("city"),
-            attempt.get("browser"), attempt.get("os"), attempt.get("device_type"),
-            attempt.get("screen_resolution"), attempt.get("timezone"),
-            attempt.get("session_id"), attempt.get("failure_reason"), attempt["timestamp"],
-        )
+    await _db.execute(
+        """INSERT INTO login_attempts
+           (id, user_id, user_email, success, ip_address, country, city,
+            browser, os, device_type, screen_resolution, timezone, session_id, failure_reason, timestamp)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)""",
+        attempt["id"], attempt.get("user_id"), attempt["user_email"],
+        1 if attempt["success"] else 0, attempt.get("ip_address"),
+        attempt.get("country"), attempt.get("city"),
+        attempt.get("browser"), attempt.get("os"), attempt.get("device_type"),
+        attempt.get("screen_resolution"), attempt.get("timezone"),
+        attempt.get("session_id"), attempt.get("failure_reason"), attempt["timestamp"],
+    )
 
 
 async def get_login_attempts(
@@ -521,13 +629,12 @@ async def get_login_attempts(
 
     where = " WHERE " + " AND ".join(conditions) if conditions else ""
     count_sql = f"SELECT COUNT(*) as cnt FROM login_attempts{where}"
-    offset = (page - 1) * limit
+    total = await _db.fetchval(count_sql, *params)
 
+    offset = (page - 1) * limit
     data_sql = f"SELECT * FROM login_attempts{where} ORDER BY timestamp DESC LIMIT {ph()} OFFSET {ph()}"
     params.extend([limit, offset])
-    async with _pool.acquire() as conn:
-        total = await conn.fetchval(count_sql, *params[:-2])
-        rows = await conn.fetch(data_sql, *params)
+    rows = await _db.fetch(data_sql, *params)
 
     items = []
     for r in rows:
@@ -548,60 +655,56 @@ async def get_login_attempts(
 async def create_session_activity(session_id: str, user_id: str) -> None:
     now = int(time.time() * 1000)
     sa_id = f"sa-{uuid.uuid4().hex[:10]}"
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO session_activity (id, session_id, user_id, started_at, last_activity_at)
-               VALUES ($1, $2, $3, $4, $5)""",
-            sa_id, session_id, user_id, now, now,
-        )
+    await _db.execute(
+        """INSERT INTO session_activity (id, session_id, user_id, started_at, last_activity_at)
+           VALUES ($1, $2, $3, $4, $5)""",
+        sa_id, session_id, user_id, now, now,
+    )
 
 
 async def update_session_heartbeat(session_id: str, active: bool) -> None:
     """Update session activity from heartbeat (called every 30s)."""
     now = int(time.time() * 1000)
     interval_ms = 30000
-    async with _pool.acquire() as conn:
-        if active:
-            await conn.execute(
-                """UPDATE session_activity
-                   SET last_activity_at = $1, active_duration_ms = active_duration_ms + $2, actions_count = actions_count + 1
-                   WHERE session_id = $3 AND ended_at IS NULL""",
-                now, interval_ms, session_id,
-            )
-        else:
-            await conn.execute(
-                """UPDATE session_activity
-                   SET last_activity_at = $1, idle_duration_ms = idle_duration_ms + $2
-                   WHERE session_id = $3 AND ended_at IS NULL""",
-                now, interval_ms, session_id,
-            )
+    if active:
+        await _db.execute(
+            """UPDATE session_activity
+               SET last_activity_at = $1, active_duration_ms = active_duration_ms + $2, actions_count = actions_count + 1
+               WHERE session_id = $3 AND ended_at IS NULL""",
+            now, interval_ms, session_id,
+        )
+    else:
+        await _db.execute(
+            """UPDATE session_activity
+               SET last_activity_at = $1, idle_duration_ms = idle_duration_ms + $2
+               WHERE session_id = $3 AND ended_at IS NULL""",
+            now, interval_ms, session_id,
+        )
 
 
 async def end_session_activity(session_id: str) -> None:
     now = int(time.time() * 1000)
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE session_activity SET ended_at = $1 WHERE session_id = $2 AND ended_at IS NULL",
-            now, session_id,
-        )
+    await _db.execute(
+        "UPDATE session_activity SET ended_at = $1 WHERE session_id = $2 AND ended_at IS NULL",
+        now, session_id,
+    )
 
 
 async def get_session_activities() -> list[dict]:
     """Get recent session activities (last 7 days)."""
     cutoff = int(time.time() * 1000) - 7 * 86400 * 1000
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            """SELECT sa.*, u.email as user_email FROM session_activity sa
-               LEFT JOIN users u ON sa.user_id = u.id
-               WHERE sa.started_at >= $1
-               ORDER BY sa.started_at DESC""",
-            cutoff,
-        )
+    rows = await _db.fetch(
+        """SELECT sa.*, u.email as user_email FROM session_activity sa
+           LEFT JOIN users u ON sa.user_id = u.id
+           WHERE sa.started_at >= $1
+           ORDER BY sa.started_at DESC""",
+        cutoff,
+    )
     items = []
     for r in rows:
         items.append({
             "session_id": r["session_id"], "user_id": r["user_id"],
-            "user_email": r["user_email"] if "user_email" in r.keys() else None,
+            "user_email": r.get("user_email"),
             "started_at": r["started_at"], "ended_at": r["ended_at"],
             "last_activity_at": r["last_activity_at"],
             "active_duration_ms": r["active_duration_ms"],
@@ -615,28 +718,26 @@ async def get_session_activities() -> list[dict]:
 # ── Token Usage ─────────────────────────────────────────────
 
 async def save_token_usage(usage: dict) -> None:
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO token_usage
-               (id, user_id, user_email, conversation_id, model,
-                prompt_tokens, completion_tokens, total_tokens, thinking_tokens, latency_ms, timestamp)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
-            usage["id"], usage["user_id"], usage.get("user_email"),
-            usage.get("conversation_id"), usage["model"],
-            usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
-            usage.get("total_tokens", 0), usage.get("thinking_tokens", 0),
-            usage.get("latency_ms", 0), usage["timestamp"],
-        )
+    await _db.execute(
+        """INSERT INTO token_usage
+           (id, user_id, user_email, conversation_id, model,
+            prompt_tokens, completion_tokens, total_tokens, thinking_tokens, latency_ms, timestamp)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+        usage["id"], usage["user_id"], usage.get("user_email"),
+        usage.get("conversation_id"), usage["model"],
+        usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
+        usage.get("total_tokens", 0), usage.get("thinking_tokens", 0),
+        usage.get("latency_ms", 0), usage["timestamp"],
+    )
 
 
 # ── Query Cache ─────────────────────────────────────────────
 
 async def get_cache_by_hash(query_hash: str) -> dict | None:
-    async with _pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT * FROM query_cache WHERE query_hash = $1 AND is_active = 1",
-            query_hash,
-        )
+    row = await _db.fetchrow(
+        "SELECT * FROM query_cache WHERE query_hash = $1 AND is_active = 1",
+        query_hash,
+    )
     if not row:
         return None
     return {
@@ -653,10 +754,9 @@ async def get_cache_by_hash(query_hash: str) -> dict | None:
 
 
 async def get_all_active_cache_entries() -> list[dict]:
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM query_cache WHERE is_active = 1"
-        )
+    rows = await _db.fetch(
+        "SELECT * FROM query_cache WHERE is_active = 1"
+    )
     return [
         {
             "id": row["id"],
@@ -671,11 +771,10 @@ async def get_all_active_cache_entries() -> list[dict]:
 
 async def update_cache_hit(cache_id: str) -> None:
     now = int(time.time() * 1000)
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE query_cache SET hit_count = hit_count + 1, last_accessed_at = $1 WHERE id = $2",
-            now, cache_id,
-        )
+    await _db.execute(
+        "UPDATE query_cache SET hit_count = hit_count + 1, last_accessed_at = $1 WHERE id = $2",
+        now, cache_id,
+    )
 
 
 async def save_cache_entry(
@@ -687,14 +786,13 @@ async def save_cache_entry(
 ) -> dict:
     cache_id = f"qc-{uuid.uuid4().hex[:8]}"
     now = int(time.time() * 1000)
-    async with _pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO query_cache
-               (id, query_hash, query_text, response, reasoning, sources_json,
-                hit_count, is_active, created_at, last_accessed_at)
-               VALUES ($1, $2, $3, $4, $5, $6, 0, 1, $7, $8)""",
-            cache_id, query_hash, query_text, response, reasoning, sources_json, now, now,
-        )
+    await _db.execute(
+        """INSERT INTO query_cache
+           (id, query_hash, query_text, response, reasoning, sources_json,
+            hit_count, is_active, created_at, last_accessed_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 0, 1, $7, $8)""",
+        cache_id, query_hash, query_text, response, reasoning, sources_json, now, now,
+    )
     return {"id": cache_id, "query_hash": query_hash, "query_text": query_text}
 
 
@@ -705,22 +803,21 @@ async def get_overview_stats() -> dict:
     day_ago = now - 86400 * 1000
     today_start = now - (now % (86400 * 1000))
 
-    async with _pool.acquire() as conn:
-        total_users = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_active = 1")
-        active_24h = await conn.fetchval(
-            "SELECT COUNT(DISTINCT user_id) FROM audit_events WHERE timestamp >= $1", day_ago)
-        active_sessions = await conn.fetchval(
-            "SELECT COUNT(*) FROM session_activity WHERE ended_at IS NULL")
-        total_queries = await conn.fetchval(
-            "SELECT COUNT(*) FROM audit_events WHERE event_type = 'generate'")
-        total_tokens = await conn.fetchval(
-            "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage")
-        queries_today = await conn.fetchval(
-            "SELECT COUNT(*) FROM audit_events WHERE event_type = 'generate' AND timestamp >= $1",
-            today_start)
-        tokens_today = await conn.fetchval(
-            "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage WHERE timestamp >= $1",
-            today_start)
+    total_users = await _db.fetchval("SELECT COUNT(*) FROM users WHERE is_active = 1")
+    active_24h = await _db.fetchval(
+        "SELECT COUNT(DISTINCT user_id) FROM audit_events WHERE timestamp >= $1", day_ago)
+    active_sessions = await _db.fetchval(
+        "SELECT COUNT(*) FROM session_activity WHERE ended_at IS NULL")
+    total_queries = await _db.fetchval(
+        "SELECT COUNT(*) FROM audit_events WHERE event_type = 'generate'")
+    total_tokens = await _db.fetchval(
+        "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage")
+    queries_today = await _db.fetchval(
+        "SELECT COUNT(*) FROM audit_events WHERE event_type = 'generate' AND timestamp >= $1",
+        today_start)
+    tokens_today = await _db.fetchval(
+        "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage WHERE timestamp >= $1",
+        today_start)
 
     return {
         "total_users": total_users,
@@ -736,27 +833,37 @@ async def get_overview_stats() -> dict:
 async def get_daily_activity(days: int = 30) -> list[dict]:
     cutoff = int(time.time() * 1000) - days * 86400 * 1000
 
-    async with _pool.acquire() as conn:
-        event_rows = await conn.fetch(
-            """SELECT
-                 to_char(to_timestamp(timestamp / 1000), 'YYYY-MM-DD') as date,
-                 SUM(CASE WHEN event_type = 'login' THEN 1 ELSE 0 END) as logins,
-                 SUM(CASE WHEN event_type = 'generate' THEN 1 ELSE 0 END) as queries
-               FROM audit_events
-               WHERE timestamp >= $1
-               GROUP BY date
-               ORDER BY date""",
-            cutoff,
-        )
-        token_rows = await conn.fetch(
-            """SELECT to_char(to_timestamp(timestamp / 1000), 'YYYY-MM-DD') as date,
-                      COALESCE(SUM(total_tokens), 0) as tokens
-               FROM token_usage
-               WHERE timestamp >= $1
-               GROUP BY date
-               ORDER BY date""",
-            cutoff,
-        )
+    if _is_sqlite():
+        date_expr = "strftime('%Y-%m-%d', timestamp / 1000, 'unixepoch')"
+    else:
+        date_expr = "to_char(to_timestamp(timestamp / 1000), 'YYYY-MM-DD')"
+
+    event_rows = await _db.fetch(
+        f"""SELECT
+             {date_expr} as date,
+             SUM(CASE WHEN event_type = 'login' THEN 1 ELSE 0 END) as logins,
+             SUM(CASE WHEN event_type = 'generate' THEN 1 ELSE 0 END) as queries
+           FROM audit_events
+           WHERE timestamp >= $1
+           GROUP BY date
+           ORDER BY date""",
+        cutoff,
+    )
+
+    if _is_sqlite():
+        token_date_expr = "strftime('%Y-%m-%d', timestamp / 1000, 'unixepoch')"
+    else:
+        token_date_expr = "to_char(to_timestamp(timestamp / 1000), 'YYYY-MM-DD')"
+
+    token_rows = await _db.fetch(
+        f"""SELECT {token_date_expr} as date,
+                  COALESCE(SUM(total_tokens), 0) as tokens
+           FROM token_usage
+           WHERE timestamp >= $1
+           GROUP BY date
+           ORDER BY date""",
+        cutoff,
+    )
 
     token_map = {r["date"]: int(r["tokens"]) for r in token_rows}
     results = []
@@ -781,19 +888,24 @@ async def get_token_usage_over_time(
     if to_ts is None:
         to_ts = int(time.time() * 1000)
 
-    fmt = 'YYYY-MM-DD' if group_by == "day" else 'YYYY-MM-DD HH24:00'
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            f"""SELECT to_char(to_timestamp(timestamp / 1000), '{fmt}') as date,
-                       COALESCE(SUM(prompt_tokens), 0) as prompt_tokens,
-                       COALESCE(SUM(completion_tokens), 0) as completion_tokens,
-                       COALESCE(SUM(total_tokens), 0) as total_tokens,
-                       COUNT(*) as request_count
-                FROM token_usage
-                WHERE timestamp >= $1 AND timestamp <= $2
-                GROUP BY date ORDER BY date""",
-            from_ts, to_ts,
-        )
+    if _is_sqlite():
+        fmt = '%Y-%m-%d' if group_by == "day" else '%Y-%m-%d %H:00'
+        date_expr = f"strftime('{fmt}', timestamp / 1000, 'unixepoch')"
+    else:
+        fmt = 'YYYY-MM-DD' if group_by == "day" else 'YYYY-MM-DD HH24:00'
+        date_expr = f"to_char(to_timestamp(timestamp / 1000), '{fmt}')"
+
+    rows = await _db.fetch(
+        f"""SELECT {date_expr} as date,
+                   COALESCE(SUM(prompt_tokens), 0) as prompt_tokens,
+                   COALESCE(SUM(completion_tokens), 0) as completion_tokens,
+                   COALESCE(SUM(total_tokens), 0) as total_tokens,
+                   COUNT(*) as request_count
+            FROM token_usage
+            WHERE timestamp >= $1 AND timestamp <= $2
+            GROUP BY date ORDER BY date""",
+        from_ts, to_ts,
+    )
 
     return [
         {
@@ -808,16 +920,20 @@ async def get_token_usage_over_time(
 
 
 async def get_token_usage_by_user() -> list[dict]:
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            """SELECT user_id, user_email,
-                      COALESCE(SUM(total_tokens), 0) as total_tokens,
-                      COUNT(*) as request_count,
-                      CASE WHEN COUNT(*) > 0 THEN SUM(total_tokens)::float / COUNT(*) ELSE 0 END as avg_tokens
-               FROM token_usage
-               GROUP BY user_id, user_email
-               ORDER BY total_tokens DESC""",
-        )
+    if _is_sqlite():
+        avg_expr = "CASE WHEN COUNT(*) > 0 THEN CAST(SUM(total_tokens) AS REAL) / COUNT(*) ELSE 0 END"
+    else:
+        avg_expr = "CASE WHEN COUNT(*) > 0 THEN SUM(total_tokens)::float / COUNT(*) ELSE 0 END"
+
+    rows = await _db.fetch(
+        f"""SELECT user_id, user_email,
+                  COALESCE(SUM(total_tokens), 0) as total_tokens,
+                  COUNT(*) as request_count,
+                  {avg_expr} as avg_tokens
+           FROM token_usage
+           GROUP BY user_id, user_email
+           ORDER BY total_tokens DESC""",
+    )
 
     return [
         {
@@ -834,17 +950,23 @@ async def get_usage_heatmap() -> list[dict]:
     """Get hourly usage distribution for the last 30 days."""
     cutoff = int(time.time() * 1000) - 30 * 86400 * 1000
 
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            """SELECT
-                 EXTRACT(DOW FROM to_timestamp(timestamp / 1000))::int as day_of_week,
-                 EXTRACT(HOUR FROM to_timestamp(timestamp / 1000))::int as hour,
-                 COUNT(*) as count
-               FROM audit_events
-               WHERE timestamp >= $1
-               GROUP BY day_of_week, hour""",
-            cutoff,
-        )
+    if _is_sqlite():
+        dow_expr = "CAST(strftime('%w', timestamp / 1000, 'unixepoch') AS INTEGER)"
+        hour_expr = "CAST(strftime('%H', timestamp / 1000, 'unixepoch') AS INTEGER)"
+    else:
+        dow_expr = "EXTRACT(DOW FROM to_timestamp(timestamp / 1000))::int"
+        hour_expr = "EXTRACT(HOUR FROM to_timestamp(timestamp / 1000))::int"
+
+    rows = await _db.fetch(
+        f"""SELECT
+             {dow_expr} as day_of_week,
+             {hour_expr} as hour,
+             COUNT(*) as count
+           FROM audit_events
+           WHERE timestamp >= $1
+           GROUP BY day_of_week, hour""",
+        cutoff,
+    )
 
     return [
         {"day_of_week": int(r["day_of_week"]), "hour": int(r["hour"]), "count": int(r["count"])}
@@ -854,17 +976,16 @@ async def get_usage_heatmap() -> list[dict]:
 
 async def get_user_activity(user_id: str) -> dict:
     """Get activity stats for a specific user."""
-    async with _pool.acquire() as conn:
-        total_queries = await conn.fetchval(
-            "SELECT COUNT(*) FROM audit_events WHERE user_id = $1 AND event_type = 'generate'", user_id)
-        total_tokens = await conn.fetchval(
-            "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage WHERE user_id = $1", user_id)
-        total_active_ms = await conn.fetchval(
-            "SELECT COALESCE(SUM(active_duration_ms), 0) FROM session_activity WHERE user_id = $1", user_id)
-        total_logins = await conn.fetchval(
-            "SELECT COUNT(*) FROM login_attempts WHERE user_id = $1 AND success = 1", user_id)
-        last_active = await conn.fetchval(
-            "SELECT timestamp FROM audit_events WHERE user_id = $1 ORDER BY timestamp DESC LIMIT 1", user_id)
+    total_queries = await _db.fetchval(
+        "SELECT COUNT(*) FROM audit_events WHERE user_id = $1 AND event_type = 'generate'", user_id)
+    total_tokens = await _db.fetchval(
+        "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage WHERE user_id = $1", user_id)
+    total_active_ms = await _db.fetchval(
+        "SELECT COALESCE(SUM(active_duration_ms), 0) FROM session_activity WHERE user_id = $1", user_id)
+    total_logins = await _db.fetchval(
+        "SELECT COUNT(*) FROM login_attempts WHERE user_id = $1 AND success = 1", user_id)
+    last_active = await _db.fetchval(
+        "SELECT timestamp FROM audit_events WHERE user_id = $1 ORDER BY timestamp DESC LIMIT 1", user_id)
 
     return {
         "user_id": user_id,
@@ -880,37 +1001,54 @@ async def get_user_activity(user_id: str) -> dict:
 
 async def query_multi_ip_logins(hours: int = 1) -> list[dict]:
     cutoff = int(time.time() * 1000) - hours * 3600 * 1000
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            """SELECT user_email, COUNT(DISTINCT ip_address) as ip_count,
-                      STRING_AGG(DISTINCT ip_address, ',') as ips
-               FROM login_attempts
-               WHERE success = 1 AND timestamp >= $1
-               GROUP BY user_email
-               HAVING COUNT(DISTINCT ip_address) > 1""",
-            cutoff,
-        )
+
+    if _is_sqlite():
+        agg = "GROUP_CONCAT(DISTINCT ip_address)"
+    else:
+        agg = "STRING_AGG(DISTINCT ip_address, ',')"
+
+    rows = await _db.fetch(
+        f"""SELECT user_email, COUNT(DISTINCT ip_address) as ip_count,
+                  {agg} as ips
+           FROM login_attempts
+           WHERE success = 1 AND timestamp >= $1
+           GROUP BY user_email
+           HAVING COUNT(DISTINCT ip_address) > 1""",
+        cutoff,
+    )
     return [{"user_email": r["user_email"], "ip_count": int(r["ip_count"]), "ips": r["ips"]} for r in rows]
 
 
 async def query_rapid_requests(minutes: int = 5, threshold: int = 50) -> list[dict]:
     cutoff = int(time.time() * 1000) - minutes * 60 * 1000
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            """SELECT user_email, COUNT(*) as request_count
-               FROM audit_events
-               WHERE timestamp >= $1
-               GROUP BY user_email
-               HAVING COUNT(*) > $2""",
-            cutoff, threshold,
-        )
+    rows = await _db.fetch(
+        """SELECT user_email, COUNT(*) as request_count
+           FROM audit_events
+           WHERE timestamp >= $1
+           GROUP BY user_email
+           HAVING COUNT(*) > $2""",
+        cutoff, threshold,
+    )
     return [{"user_email": r["user_email"], "request_count": int(r["request_count"])} for r in rows]
 
 
 async def query_off_hours_access(start_hour: int = 9, end_hour: int = 18) -> list[dict]:
     cutoff = int(time.time() * 1000) - 24 * 3600 * 1000
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
+
+    if _is_sqlite():
+        hour_expr = "CAST(strftime('%H', timestamp / 1000, 'unixepoch') AS INTEGER)"
+        rows = await _db.fetch(
+            f"""SELECT user_email,
+                      {hour_expr} as hour,
+                      COUNT(*) as cnt
+               FROM audit_events
+               WHERE timestamp >= $1
+               GROUP BY user_email, hour
+               HAVING hour < $2 OR hour >= $3""",
+            cutoff, start_hour, end_hour,
+        )
+    else:
+        rows = await _db.fetch(
             """SELECT user_email,
                       EXTRACT(HOUR FROM to_timestamp(timestamp / 1000))::int as hour,
                       COUNT(*) as cnt
@@ -921,18 +1059,18 @@ async def query_off_hours_access(start_hour: int = 9, end_hour: int = 18) -> lis
                    OR EXTRACT(HOUR FROM to_timestamp(timestamp / 1000)) >= $3""",
             cutoff, start_hour, end_hour,
         )
+
     return [{"user_email": r["user_email"], "hour": int(r["hour"]), "count": int(r["cnt"])} for r in rows]
 
 
 async def query_repeated_failures(hours: int = 1, threshold: int = 5) -> list[dict]:
     cutoff = int(time.time() * 1000) - hours * 3600 * 1000
-    async with _pool.acquire() as conn:
-        rows = await conn.fetch(
-            """SELECT user_email, COUNT(*) as failure_count
-               FROM login_attempts
-               WHERE success = 0 AND timestamp >= $1
-               GROUP BY user_email
-               HAVING COUNT(*) >= $2""",
-            cutoff, threshold,
-        )
+    rows = await _db.fetch(
+        """SELECT user_email, COUNT(*) as failure_count
+           FROM login_attempts
+           WHERE success = 0 AND timestamp >= $1
+           GROUP BY user_email
+           HAVING COUNT(*) >= $2""",
+        cutoff, threshold,
+    )
     return [{"user_email": r["user_email"], "failure_count": int(r["failure_count"])} for r in rows]

@@ -6,15 +6,15 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3-pro-preview"
+    gemini_model: str = "gemini-flash-latest"
     excel_data_path: str = str(Path(__file__).resolve().parent.parent / "Canned_Responses_Templatefull.xlsx")
 
     # Cloud SQL (asyncpg DSN)
     database_url: str = ""
 
     # BigQuery vector store
-    gcp_project_id: str = "gtm-cloud-helpdesk"
-    bq_dataset: str = "email_composer_vectors"
+    gcp_project_id: str = "resolve-490813"
+    bq_dataset: str = "resolve_vectors"
     bq_table: str = "canned_responses"
 
     # Vertex AI embeddings

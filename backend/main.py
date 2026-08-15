@@ -39,7 +39,10 @@ async def lifespan(app: FastAPI):
     await delete_expired_sessions()
 
     logger.info("Initializing BigQuery vector store...")
-    init_vector_store()
+    try:
+        init_vector_store()
+    except Exception as e:
+        logger.warning("BigQuery vector store unavailable (local dev?): %s", e)
 
     logger.info("Initializing Gemini client...")
     init_client()

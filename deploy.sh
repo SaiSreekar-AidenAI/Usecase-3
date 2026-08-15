@@ -1,29 +1,14 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# ── Configuration ──────────────────────────────────────────────────────────────
-PROJECT_ID="${PROJECT_ID:-gtm-cloud-helpdesk}"
-REGION="${REGION:-us-central1}"
-REPO="us-central1-docker.pkg.dev/${PROJECT_ID}/email-composer-repo"
-
-BACKEND_IMAGE="${REPO}/email-composer-backend:v1"
-FRONTEND_IMAGE="${REPO}/email-composer-frontend:v1"
-BACKEND_SERVICE="email-composer-backend"
-FRONTEND_SERVICE="email-composer-frontend"
-BACKEND_URL=""  # Set after first deploy
-
-# Cloud SQL (Postgres) — connected via the Cloud SQL Auth Proxy sidecar in Cloud Run.
-# DATABASE_URL uses asyncpg's Unix-socket form: postgresql://USER:PASS@/DBNAME?host=/cloudsql/INSTANCE
-CLOUD_SQL_INSTANCE="${CLOUD_SQL_INSTANCE:-${PROJECT_ID}:${REGION}:email-composer-db}"
-DB_USER="${DB_USER:-postgres}"
-DB_PASS="${DB_PASS:-}"  # REQUIRED — export DB_PASS before running
-DB_NAME="${DB_NAME:-email_composer}"
-
-# BigQuery vector store
-BQ_DATASET="${BQ_DATASET:-email_composer_vectors}"
-BQ_TABLE="${BQ_TABLE:-canned_responses}"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ── State ──────────────────────────────────────────────────────────────────────
+ENV_NAME=""
+DEPLOY_BACKEND=false
+DEPLOY_FRONTEND=false
+BACKEND_URL="${BACKEND_URL:-}"
+DB_PASS="${DB_PASS:-}"  # REQUIRED for backend — export DB_PASS before running
 
 # ── Color / ANSI constants ─────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -280,47 +265,59 @@ preflight() {
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 show_help() {
-  cat <<'HELP'
+  local configs=""
+  if compgen -G "$SCRIPT_DIR/deploy.config/*.env" > /dev/null; then
+    configs=$(ls "$SCRIPT_DIR/deploy.config"/*.env 2>/dev/null \
+      | sed -E 's#.*/([^/]+)\.env#    --env \1#')
+  else
+    configs="    (none — add one under deploy.config/)"
+  fi
+  cat <<HELP
 
-  Usage: ./deploy.sh [backend] [frontend] [-h|--help]
+  Usage: ./deploy.sh --env <name> [backend] [frontend] [-h|--help]
 
-  Deploy the Email Composer app (FastAPI + Angular) to Google Cloud Run.
+  Deploy the Resolve app (FastAPI + Angular) to Google Cloud Run.
   Backend uses Cloud SQL (Postgres via asyncpg) + BigQuery vector search + Vertex AI.
+
+  Available configs (from deploy.config/):
+${configs}
 
   Required env vars for backend deploy:
     DB_PASS             Cloud SQL postgres password (REQUIRED)
 
-  Optional overrides:
-    PROJECT_ID          default: gtm-cloud-helpdesk
-    REGION              default: us-central1
-    CLOUD_SQL_INSTANCE  default: \${PROJECT_ID}:\${REGION}:email-composer-db
-    DB_USER             default: postgres
-    DB_NAME             default: email_composer
-    BQ_DATASET          default: email_composer_vectors
-    BQ_TABLE            default: canned_responses
+  Config file fields (see deploy.config/README.md):
+    PROJECT_ID, REGION, REPO_NAME, BACKEND_SERVICE, FRONTEND_SERVICE,
+    CLOUD_SQL_INSTANCE_NAME, DB_USER, DB_NAME, BQ_DATASET, BQ_TABLE,
+    GEMINI_SECRET_NAME, GCP_ACCOUNT
+
+  Any of those can be overridden from the shell before invoking deploy.sh,
+  e.g. PROJECT_ID=my-other-project ./deploy.sh --env resolve backend
 
   Prereqs (run once per GCP project):
-    1. gcloud auth login
-    2. Create the Cloud SQL Postgres instance: CLOUD_SQL_INSTANCE
+    1. gcloud auth login as GCP_ACCOUNT
+    2. Create the Cloud SQL Postgres instance CLOUD_SQL_INSTANCE_NAME
     3. Create database DB_NAME inside that instance
-    4. Create BigQuery dataset BQ_DATASET (us-central1)
-    5. Create BQ table with schema:
+    4. Create BigQuery dataset BQ_DATASET in the same REGION
+    5. Create BQ table BQ_TABLE with schema:
          id STRING, category STRING, description STRING, response STRING,
          document STRING, embedding ARRAY<FLOAT64>
        then create a vector index on 'embedding' (optional but recommended)
-    6. Grant the Cloud Run service account:
+    6. Create Secret Manager secret GEMINI_SECRET_NAME with Gemini API key
+    7. Grant the Cloud Run service account:
          roles/cloudsql.client
          roles/aiplatform.user
          roles/bigquery.dataEditor
          roles/bigquery.jobUser
+         roles/secretmanager.secretAccessor
 
   Arguments:
-    backend     Deploy only the backend service
-    frontend    Deploy only the frontend service
-    (none)      Deploy both backend and frontend
+    --env <name>, -e <name>   Load deploy.config/<name>.env (REQUIRED)
+    backend                   Deploy only the backend service
+    frontend                  Deploy only the frontend service
+    (no backend/frontend)     Deploy both
 
   Options:
-    -h, --help  Show this help message
+    -h, --help                Show this help message
 
 HELP
 }
@@ -328,17 +325,58 @@ HELP
 # ── Argument parsing ───────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    backend)   DEPLOY_BACKEND=true ;;
-    frontend)  DEPLOY_FRONTEND=true ;;
+    --env|-e)  ENV_NAME="${2:-}"; shift 2 ;;
+    --env=*)   ENV_NAME="${1#--env=}"; shift ;;
+    backend)   DEPLOY_BACKEND=true; shift ;;
+    frontend)  DEPLOY_FRONTEND=true; shift ;;
     -h|--help) show_help; exit 0 ;;
-    *)         log_error "Unknown argument: $1"; show_help; exit 1 ;;
+    *)         printf "Unknown argument: %s\n" "$1" >&2; show_help; exit 1 ;;
   esac
-  shift
 done
+
+if [[ -z "$ENV_NAME" ]]; then
+  printf "Error: --env <name> is required.\n\n" >&2
+  show_help
+  exit 1
+fi
+
+CONFIG_FILE="$SCRIPT_DIR/deploy.config/${ENV_NAME}.env"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  printf "Error: config file not found: %s\n" "$CONFIG_FILE" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$CONFIG_FILE"
+
+# Validate required fields (shell-env overrides win because they were set before source).
+: "${PROJECT_ID:?PROJECT_ID must be set in $CONFIG_FILE}"
+: "${REGION:=us-central1}"
+: "${REPO_NAME:?REPO_NAME must be set in $CONFIG_FILE}"
+: "${BACKEND_SERVICE:?BACKEND_SERVICE must be set in $CONFIG_FILE}"
+: "${FRONTEND_SERVICE:?FRONTEND_SERVICE must be set in $CONFIG_FILE}"
+: "${CLOUD_SQL_INSTANCE_NAME:?CLOUD_SQL_INSTANCE_NAME must be set in $CONFIG_FILE}"
+: "${DB_USER:?DB_USER must be set in $CONFIG_FILE}"
+: "${DB_NAME:?DB_NAME must be set in $CONFIG_FILE}"
+: "${BQ_DATASET:?BQ_DATASET must be set in $CONFIG_FILE}"
+: "${BQ_TABLE:=canned_responses}"
+: "${GEMINI_SECRET_NAME:=gemini-api-key}"
+
+# Derived values
+REPO="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
+BACKEND_IMAGE="${REPO}/${BACKEND_SERVICE}:v1"
+FRONTEND_IMAGE="${REPO}/${FRONTEND_SERVICE}:v1"
+CLOUD_SQL_INSTANCE="${PROJECT_ID}:${REGION}:${CLOUD_SQL_INSTANCE_NAME}"
 
 if ! $DEPLOY_BACKEND && ! $DEPLOY_FRONTEND; then
   DEPLOY_BACKEND=true
   DEPLOY_FRONTEND=true
+fi
+
+# If GCP_ACCOUNT is set, point gcloud at it before anything else runs.
+if [[ -n "${GCP_ACCOUNT:-}" ]]; then
+  gcloud config set account "$GCP_ACCOUNT" --quiet >/dev/null 2>&1 || true
+  gcloud config set project "$PROJECT_ID" --quiet >/dev/null 2>&1 || true
 fi
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -369,17 +407,32 @@ main() {
         --project "$PROJECT_ID" \
         --allow-unauthenticated \
         --add-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
-        --set-env-vars "DATABASE_URL=${database_url},GCP_PROJECT_ID=${PROJECT_ID},BQ_DATASET=${BQ_DATASET},BQ_TABLE=${BQ_TABLE},EMBEDDING_LOCATION=${REGION}" \
+        --set-env-vars "DATABASE_URL=${database_url},GCP_PROJECT_ID=${PROJECT_ID},BQ_DATASET=${BQ_DATASET},BQ_TABLE=${BQ_TABLE},EMBEDDING_LOCATION=${REGION},ENV=production" \
+        --set-secrets "GEMINI_API_KEY=${GEMINI_SECRET_NAME}:latest" \
         --quiet
   fi
 
   # ── Frontend ──
   if $DEPLOY_FRONTEND; then
+    # Need the backend URL baked into the frontend image so nginx can proxy
+    # /api/* to the backend service. If backend wasn't redeployed this pass,
+    # still look it up from the existing service.
+    if [[ -z "$BACKEND_URL" ]]; then
+      BACKEND_URL=$(gcloud run services describe "$BACKEND_SERVICE" \
+        --region "$REGION" --project "$PROJECT_ID" \
+        --format='value(status.url)' 2>/dev/null || echo "")
+    fi
+    if [[ -z "$BACKEND_URL" ]]; then
+      log_error "Could not resolve backend URL — deploy backend first or pass BACKEND_URL"
+      exit 1
+    fi
+    log_info "Frontend will proxy /api/ → ${BACKEND_URL}"
+
     run_phase "Build frontend image" \
       gcloud builds submit \
         --config "$SCRIPT_DIR/frontend/cloudbuild.yaml" \
         --project "$PROJECT_ID" \
-        --substitutions="_BACKEND_URL=${BACKEND_URL}" \
+        --substitutions="_BACKEND_URL=${BACKEND_URL},_PROJECT_ID=${PROJECT_ID},_REPO_NAME=${REPO_NAME},_FRONTEND_IMAGE_NAME=${FRONTEND_SERVICE},_REGION=${REGION}" \
         "$SCRIPT_DIR/frontend"
 
     run_phase "Deploy frontend to Cloud Run" \

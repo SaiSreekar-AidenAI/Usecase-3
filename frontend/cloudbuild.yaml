@@ -2,10 +2,19 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--build-arg'
+      - 'BACKEND_URL=${_BACKEND_URL}'
       - '-t'
-      - 'us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo/email-composer-frontend:v1'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_FRONTEND_IMAGE_NAME}:v1'
       - '.'
 images:
-  - 'us-central1-docker.pkg.dev/gtm-cloud-helpdesk/email-composer-repo/email-composer-frontend:v1'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_FRONTEND_IMAGE_NAME}:v1'
 substitutions:
-  _BACKEND_URL: ''  # Set after first deploy if you wire it through environment.prod.ts
+  # All injected by deploy.sh; kept here so the config is runnable standalone.
+  _BACKEND_URL: ''
+  _PROJECT_ID: 'resolve-490813'
+  _REPO_NAME: 'resolve-repo'
+  _FRONTEND_IMAGE_NAME: 'resolve-frontend'
+  _REGION: 'us-central1'
+options:
+  dynamic_substitutions: true
